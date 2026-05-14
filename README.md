@@ -5,6 +5,13 @@ allocation system. The current canonical engine is V6.3 — the
 partner-delivery adapter that targets the basis-portfolio benchmark in
 `Agur/baseline_pnl_partner_delivery.xlsx`.
 
+> **Partner data not included.** Every runner / validator / sweep script
+> expects `Agur/baseline_pnl_partner_delivery.xlsx` (partner-proprietary
+> realized + forward PnL for the 13-asset universe). The file is not
+> redistributed with this repo. Place it at that path before running any
+> backtest. Without it, the engines and design docs are still readable
+> but no backtest can execute.
+
 ## Layout
 
 ```
