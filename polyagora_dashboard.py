@@ -43,10 +43,27 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
+
+
+def _scrub_for_json(obj):
+    """Recursively replace NaN/±Infinity floats with None.
+
+    Browsers reject the literal `NaN` from Python's default `json.dumps`
+    (it's invalid JSON). Scrubbing before serialization keeps the inlined
+    payload parseable by `JSON.parse` in `dashboard_template.html`.
+    """
+    if isinstance(obj, dict):
+        return {k: _scrub_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_scrub_for_json(x) for x in obj]
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    return obj
 
 import pandas as pd
 
@@ -85,6 +102,24 @@ class SignalRun:
     weights: pd.DataFrame            # date x (real_assets + CASH)
     label: str | None = None         # display name; defaults to `name`
     color: str | None = None         # hex; defaults to a shared fallback
+    # Optional engine diagnostics (currently produced by V7-Lite). Schema:
+    #   index = date, columns = ['zone', 'P', 'D', 'block_size', 'gross', 'cash']
+    diagnostics: pd.DataFrame | None = None
+    # Optional engine state metadata for diagnostic chart reference lines.
+    # Currently {'theta_1': float, 'theta_2': float, 'd_1': float, 'd_2': float}.
+    state_meta: dict | None = None
+    # Optional qualifying-polygon panel (V7.2 observer status + latest obs).
+    # Each entry: {'name', 'label', 'role', 'enabled', 'latest_observation'}.
+    polygons: list[dict] | None = None
+    # Optional per-asset MOM contribution panel (V7.4+ strategy-eigenfield
+    # signals only — same shape as `weights`, but each cell is the slice of
+    # that asset's weight coming via the MOM12-1 decomposition. Asset bands
+    # on the dashboard render as direct + MOM sub-bands when this is present.
+    weights_mom: pd.DataFrame | None = None
+    # Optional extended description shown as a hover tooltip on the signal's
+    # row in the summary table and on its legend chips. Plain text or simple
+    # HTML — kept compact (one paragraph, no images).
+    info: str | None = None
 
 
 def _series_points(s: pd.Series, decimals: int = 6) -> list[dict]:
@@ -114,6 +149,9 @@ def build_payload(
     *,
     asset_colors: dict[str, str] | None = None,
     default_weights_signal: str | None = None,
+    default_visible_signals: list[str] | None = None,
+    driver_presets: list[dict] | None = None,
+    time_range_presets: list[dict] | None = None,
 ) -> dict:
     """Build the JSON payload consumed by `dashboard_template.html`.
 
@@ -135,7 +173,10 @@ def build_payload(
     curves: list[dict] = []
     drawdowns: list[dict] = []
     weights_panels: dict[str, list[dict]] = {}
+    weights_mom_panels: dict[str, list[dict]] = {}
     formatted_summary: list[dict] = []
+    diagnostics_panels: dict[str, dict] = {}
+    polygon_panels: dict[str, list[dict]] = {}
 
     for r in runs:
         label = r.label or r.name
@@ -143,20 +184,52 @@ def build_payload(
 
         curves.append({
             "name": r.name, "label": label, "color": color,
+            "info": r.info,
             "points": _series_points(r.equity, decimals=5),
         })
         dd = r.equity / r.equity.cummax() - 1.0
         drawdowns.append({
             "name": r.name, "label": label, "color": color,
+            "info": r.info,
             "points": _series_points(dd, decimals=5),
         })
         weights_panels[r.name] = _weights_payload(r.weights, universe)
+        if r.weights_mom is not None and not r.weights_mom.empty:
+            weights_mom_panels[r.name] = _weights_payload(r.weights_mom, universe)
+
+        if r.diagnostics is not None and not r.diagnostics.empty:
+            rows = []
+            for d, row in r.diagnostics.iterrows():
+                # V7.3 β/Q fields default to identity (β=β'=Q=1) if absent
+                # so legacy V7 panels still get sensible numbers.
+                rows.append({
+                    "d": d.strftime("%Y-%m-%d"),
+                    # V7.3 β admissibility fields
+                    "beta": round(float(row.get("beta", 1.0)), 4),
+                    "beta_prime": round(float(row.get("beta_prime", 1.0)), 4),
+                    "q_combined": round(float(row.get("q_combined", 1.0)), 4),
+                    "q_vaidm": round(float(row.get("q_vaidm", 1.0)), 4),
+                    "q_add": round(float(row.get("q_add", 1.0)), 4),
+                    # Common
+                    "gross": round(float(row.get("gross", 0.0)), 4),
+                    "cash": round(float(row.get("cash", 0.0)), 4),
+                })
+            diagnostics_panels[r.name] = {
+                "label": label,
+                "color": color,
+                "rows": rows,
+                "meta": r.state_meta or {},
+            }
+
+        if r.polygons:
+            polygon_panels[r.name] = list(r.polygons)
 
         s = r.summary
         formatted_summary.append({
             "name": s.get("Series", r.name),
             "label": label,
             "color": color,
+            "info": r.info,
             "totalReturn": s.get("Total return"),
             "cagr": s.get("CAGR"),
             "vol": s.get("Ann. vol"),
@@ -181,10 +254,16 @@ def build_payload(
         "universe": list(universe),
         "assetColors": colors,
         "defaultWeightsSignal": default_weights_signal,
+        "defaultVisibleSignals": list(default_visible_signals) if default_visible_signals else None,
         "summary": formatted_summary,
         "curves": curves,
         "drawdowns": drawdowns,
         "weights": weights_panels,
+        "weightsMom": weights_mom_panels,
+        "diagnostics": diagnostics_panels,
+        "polygons": polygon_panels,
+        "driverPresets": driver_presets or [],
+        "timeRangePresets": time_range_presets or [],
     }
 
 
@@ -198,7 +277,11 @@ def render_html(
     template_path = Path(template_path) if template_path else DEFAULT_TEMPLATE_PATH
     template = template_path.read_text()
     html = template.replace("__TITLE__", title)
-    html = html.replace("__DATA__", json.dumps(payload, separators=(",", ":")))
+    safe_payload = _scrub_for_json(payload)
+    html = html.replace(
+        "__DATA__",
+        json.dumps(safe_payload, separators=(",", ":"), allow_nan=False),
+    )
     return html
 
 
@@ -210,9 +293,16 @@ def write_dashboard(
     title: str = "PolyAgora",
     asset_colors: dict[str, str] | None = None,
     default_weights_signal: str | None = None,
+    default_visible_signals: list[str] | None = None,
     template_path: Path | None = None,
+    driver_presets: list[dict] | None = None,
+    time_range_presets: list[dict] | None = None,
+    filename_stem: str = "dashboard",
 ) -> tuple[Path, Path]:
-    """Write `dashboard.html` + `dashboard_data.json` into `output_dir`.
+    """Write `<filename_stem>.html` + `<filename_stem>_data.json` into `output_dir`.
+
+    `filename_stem` defaults to "dashboard" (legacy filenames). Pass a custom
+    stem to emit a variant alongside the main dashboard — e.g. "dashboard_nm".
 
     Returns (html_path, json_path).
     """
@@ -223,10 +313,14 @@ def write_dashboard(
         runs, universe,
         asset_colors=asset_colors,
         default_weights_signal=default_weights_signal,
+        default_visible_signals=default_visible_signals,
+        driver_presets=driver_presets,
+        time_range_presets=time_range_presets,
     )
-    json_path = output_dir / "dashboard_data.json"
-    html_path = output_dir / "dashboard.html"
-    json_path.write_text(json.dumps(payload, separators=(",", ":")))
+    safe_payload = _scrub_for_json(payload)
+    json_path = output_dir / f"{filename_stem}_data.json"
+    html_path = output_dir / f"{filename_stem}.html"
+    json_path.write_text(json.dumps(safe_payload, separators=(",", ":"), allow_nan=False))
     html_path.write_text(render_html(payload, title=title, template_path=template_path))
     return html_path, json_path
 

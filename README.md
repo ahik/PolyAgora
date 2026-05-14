@@ -9,7 +9,7 @@ partner-delivery adapter that targets the basis-portfolio benchmark in
 
 ```
 polyagora_v63_partner_engine.py   canonical engine (V6.3)
-run_polyagora_v63_partner.py      runner / orchestration
+run_polyagora_v73_partner.py      runner / orchestration
 polyagora_dashboard.py            engine-agnostic dashboard layer
 dashboard_template.html           HTML template consumed by the dashboard
 polyagora_carry_core.py           shared β-throttle / carry-core helpers
@@ -22,7 +22,7 @@ V6.3 is **engine + runner + presentation**, split across three files:
 - `polyagora_v63_partner_engine.py` — pure compute. Loads the partner
   workbook, defines the signal contract, computes weights, evaluates them
   on `forward_pnl`. No I/O, no plotting.
-- `run_polyagora_v63_partner.py` — orchestration. Builds the signal
+- `run_polyagora_v73_partner.py` — orchestration. Builds the signal
   registry, runs each signal, writes per-signal CSVs, calls the dashboard
   layer.
 - `polyagora_dashboard.py` + `dashboard_template.html` — presentation,
@@ -106,27 +106,27 @@ pip install pandas numpy openpyxl
 Full backtest — runs every signal, writes CSVs, builds the dashboard:
 
 ```bash
-python run_polyagora_v63_partner.py
+python run_polyagora_v73_partner.py
 ```
 
 Single signal:
 
 ```bash
-python run_polyagora_v63_partner.py --signal polyagora_gated
+python run_polyagora_v73_partner.py --signal polyagora_gated
 ```
 
 Override the β-throttle smoothing half-life:
 
 ```bash
-python run_polyagora_v63_partner.py --beta-halflife 5.0
+python run_polyagora_v73_partner.py --beta-halflife 5.0
 ```
 
-Outputs land in `polyagora_v63_partner_outputs/`:
+Outputs land in `polyagora_v73_outputs/`:
 
 ```
 dashboard.html               self-contained interactive dashboard
 dashboard_data.json          sidecar — re-render without re-running
-summary_v63_partner.csv      per-signal summary table
+summary_v73.csv      per-signal summary table
 weights_<signal>.csv         emitted daily weights
 returns_<signal>.csv         daily forward-pnl-scored returns
 equity_<signal>.csv          cumulative equity
@@ -138,9 +138,9 @@ Useful when iterating on the HTML template:
 
 ```bash
 python -m polyagora_dashboard \
-    --data polyagora_v63_partner_outputs/dashboard_data.json \
+    --data polyagora_v73_outputs/dashboard_data.json \
     --template dashboard_template.html \
-    --out polyagora_v63_partner_outputs/dashboard.html
+    --out polyagora_v73_outputs/dashboard.html
 ```
 
 ## Tests

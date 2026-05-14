@@ -1,0 +1,1489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --text: #172033;
+  --muted: #687386;
+  --border: #d7dde6;
+  --grid: #e8edf3;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width: 1320px; margin: 0 auto; padding: 24px; }
+header { display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 16px; margin-bottom: 16px; }
+h1 { margin: 0; font-size: 24px; font-weight: 650; }
+h2 { margin: 0 0 10px 0; font-size: 16px; font-weight: 650; }
+.subtle, .updated { color: var(--muted); font-size: 13px; }
+.panel { background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+.summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.summary-table th, .summary-table td { padding: 8px 12px; border-bottom: 1px solid var(--grid); }
+.summary-table th { text-align: left; color: var(--muted); font-weight: 600; }
+.summary-table th.sharpe-col, .summary-table td.sharpe-col {
+  font-weight: 700; color: var(--text);
+  background: rgba(14,165,233,0.06);
+}
+.summary-table th.num, .summary-table td.num {
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+.summary-table th[data-sort-key] {
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+.summary-table th[data-sort-key]:hover { color: var(--text); }
+/* Reserve fixed indicator space on every sortable header so column widths
+   stay constant regardless of which column is currently sorted. */
+.summary-table th[data-sort-key]::after {
+  content: "▲";
+  visibility: hidden;
+  display: inline-block;
+  width: 9px;
+  margin-left: 4px;
+  font-size: 9px;
+  color: var(--muted);
+}
+.summary-table th.sort-asc::after  { visibility: visible; }
+.summary-table th.sort-desc::after { visibility: visible; content: "▼"; }
+.summary-table .swatch { display: inline-block; width: 10px; height: 10px;
+  border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+.chart-head { display: flex; justify-content: space-between; align-items: center;
+  gap: 16px; margin-bottom: 8px; flex-wrap: wrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px;
+  background: #fff; cursor: pointer; user-select: none; font-size: 12px; }
+.legend-item.off { opacity: .42; text-decoration: line-through; }
+.legend-item .dot { width: 8px; height: 8px; border-radius: 50%; }
+.chart { display: block; width: 100%; height: 360px; }
+.weight-chart { height: 320px; }
+select { height: 30px; border: 1px solid var(--border); border-radius: 6px;
+  background: #fff; font: inherit; font-size: 13px; padding: 0 8px; }
+.tooltip { position: fixed; pointer-events: none; background: #fff;
+  color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.06);
+  z-index: 10; display: none; min-width: 160px; }
+.tooltip .row { display: flex; justify-content: space-between; gap: 12px;
+  font-variant-numeric: tabular-nums; }
+.tooltip .row.head { color: var(--muted); margin-bottom: 4px; }
+.tooltip .row .name { display: inline-flex; align-items: center; gap: 6px; }
+.tooltip .row .dot { width: 8px; height: 8px; border-radius: 50%; }
+.tooltip .row .val { text-align: right; }
+.tooltip .row .breakdown { display: block; color: var(--muted); font-size: 11px;
+  text-align: right; margin-top: 1px; }
+.tooltip .row .breakdown .swatch { display: inline-block; width: 7px; height: 7px;
+  border-radius: 2px; margin: 0 3px 0 6px; vertical-align: middle; }
+.weight-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 4px 8px; font-size: 11px; color: var(--muted); margin-top: 8px; }
+.weight-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.weight-legend .dot { width: 8px; height: 8px; border-radius: 2px; }
+.weight-legend .legend-sep { grid-column: 1 / -1; height: 1px; background: var(--border); margin: 4px 0; }
+.note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.toolbar { background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.toolbar label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.toolbar input[type=date] { height: 30px; border: 1px solid var(--border);
+  border-radius: 6px; background: #fff; font: inherit; font-size: 13px; padding: 0 8px; }
+.toolbar button { height: 30px; padding: 0 12px; border: 1px solid var(--border);
+  border-radius: 6px; background: #fff; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; }
+.toolbar button:hover { background: #f3f4f6; }
+.toolbar .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+.toolbar .presets { display: flex; flex-wrap: wrap; gap: 6px;
+  padding-left: 8px; border-left: 1px solid var(--border); margin-left: 4px; }
+.toolbar .preset-btn { height: 30px; padding: 0 10px; border: 1px solid var(--border);
+  border-radius: 6px; background: #fff; cursor: pointer; font: inherit;
+  font-size: 12px; font-weight: 600; color: var(--muted); }
+.toolbar .preset-btn:hover { background: #f3f4f6; color: var(--text); }
+.toolbar .preset-btn.active { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+.summary-table .has-info { cursor: help; border-bottom: 1px dotted var(--muted); }
+.legend-item.has-info { cursor: help; }
+.info-tooltip { position: fixed; pointer-events: none; background: #fff;
+  color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 12px; font-size: 12px; line-height: 1.45;
+  box-shadow: 0 6px 16px rgba(0,0,0,.08); z-index: 11; display: none;
+  max-width: 380px; }
+.info-tooltip .head { font-weight: 700; margin-bottom: 4px; }
+.info-tooltip .body { color: var(--muted); }
+.brush-rect { fill: rgba(99, 102, 241, 0.16);
+  stroke: rgba(99, 102, 241, 0.55); stroke-width: 1; pointer-events: none; }
+svg.chart { cursor: crosshair; touch-action: none; }
+.kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.kpi-tile { background: #fff; border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 12px; text-align: center; }
+.kpi-tile .label { color: var(--muted); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.06em; margin-bottom: 4px; }
+.kpi-tile .value { font-size: 20px; font-weight: 650;
+  font-variant-numeric: tabular-nums; }
+.kpi-tile.zone-Z1 { background: #f0fdf4; border-color: #86efac; }
+.kpi-tile.zone-Z2 { background: #fffbeb; border-color: #fcd34d; }
+.kpi-tile.zone-Z3 { background: #fef2f2; border-color: #fca5a5; }
+.zone-band-Z1 { fill: rgba(34, 197, 94, 0.12); }
+.zone-band-Z2 { fill: rgba(245, 158, 11, 0.14); }
+.zone-band-Z3 { fill: rgba(220, 38, 38, 0.14); }
+.kpi-tile.beta-high      { background: #f0fdf4; border-color: #86efac; }
+.kpi-tile.beta-medium    { background: #f7fee7; border-color: #bef264; }
+.kpi-tile.beta-low       { background: #fffbeb; border-color: #fcd34d; }
+.kpi-tile.beta-defensive { background: #fef2f2; border-color: #fca5a5; }
+.beta-band-high      { fill: rgba(34, 197, 94, 0.12); }
+.beta-band-medium    { fill: rgba(132, 204, 22, 0.10); }
+.beta-band-low       { fill: rgba(245, 158, 11, 0.14); }
+.beta-band-defensive { fill: rgba(220, 38, 38, 0.14); }
+.polygon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.polygon-card { border: 1px solid var(--border); border-radius: 6px; padding: 12px;
+  background: #fff; }
+.polygon-card .name { font-weight: 650; font-size: 14px; margin-bottom: 2px; }
+.polygon-card .role { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.polygon-card .obs { font-size: 12px; font-variant-numeric: tabular-nums;
+  background: #f9fafb; border-radius: 4px; padding: 6px 8px; }
+.polygon-card .obs .row { display: flex; justify-content: space-between; gap: 8px; }
+.badge { display: inline-block; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px;
+  border-radius: 999px; vertical-align: middle; margin-left: 8px; }
+.badge.on  { background: #dcfce7; color: #166534; }
+.badge.off { background: #f1f5f9; color: #64748b; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>__TITLE__</h1>
+      <div class="subtle" id="window-line"></div>
+    </div>
+    <div class="updated" id="updated-line"></div>
+  </header>
+
+  <div class="toolbar">
+    <label>From<input type="date" id="from-date"></label>
+    <label>To<input type="date" id="to-date"></label>
+    <button id="reset-range" type="button">Reset</button>
+    <div class="presets" id="range-presets"></div>
+    <span class="hint">Tip: drag horizontally on any chart to focus a window.</span>
+  </div>
+
+  <section class="panel">
+    <h2>Summary</h2>
+    <table class="summary-table" id="summary-table">
+      <thead>
+        <tr>
+          <th data-sort-key="label">Series</th>
+          <th class="num" data-sort-key="total">Total return</th>
+          <th class="num" data-sort-key="cagr">CAGR</th>
+          <th class="num" data-sort-key="vol">Ann. vol</th>
+          <th class="num sharpe-col" data-sort-key="sharpe">Sharpe</th>
+          <th class="num" data-sort-key="sortino">Sortino</th>
+          <th class="num" data-sort-key="calmar">Calmar</th>
+          <th class="num" data-sort-key="maxDD">Max DD</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="note">Metrics recalculate live as you change the From / To window or drag-to-zoom on any chart. Click any column header to sort (click again to reverse). CAGR uses 252 trading days/yr. Sharpe = mean(r) · 252 / (std · √252). Sortino uses downside-only std (returns &lt; 0); undefined on windows with no negative returns. Calmar = CAGR / |Max DD|; undefined on flat curves. Hover the series name (dotted underline) for an extended description of each signal.</div>
+  </section>
+
+  <section class="panel">
+    <div class="chart-head">
+      <h2>Equity (cumulative growth of $1)</h2>
+      <div class="legend" id="equity-legend"></div>
+    </div>
+    <svg class="chart" id="equity-chart"></svg>
+    <div class="note" id="equity-band-note"></div>
+  </section>
+
+  <section class="panel" id="driver-presets-panel" style="display:none;">
+    <h2>Driver Seat presets</h2>
+    <table class="summary-table" id="driver-presets-table">
+      <thead>
+        <tr>
+          <th>Preset</th>
+          <th class="num">Convex</th>
+          <th class="num">Carry</th>
+          <th class="num">Boundary sens.</th>
+          <th class="num">Recovery</th>
+          <th class="num">Max contraction</th>
+        </tr>
+      </thead>
+      <tbody id="driver-presets-tbody"></tbody>
+    </table>
+    <div class="note">V7.3 Driver Seat dials per <code>docs/PolyAgora-63V.pdf</code>. Each preset is a separate V7.3 backtest. All dials change parameters / β-gate config / block-probability deformation — none change asset choices. <i>Default</i> reduces V7.3 to V6.3-gated × Q polygons.</div>
+  </section>
+
+  <section class="panel" id="diag-kpi-panel" style="display:none;">
+    <div class="chart-head">
+      <h2>V7.3 Engine state</h2>
+      <div>
+        <label class="subtle" for="diag-select">Signal:&nbsp;</label>
+        <select id="diag-select"></select>
+      </div>
+    </div>
+    <div class="kpi-strip" id="kpi-strip"></div>
+    <div class="note" id="kpi-asof-note"></div>
+  </section>
+
+  <section class="panel" id="diag-zone-panel" style="display:none;">
+    <div class="chart-head">
+      <h2>β admissibility timeline</h2>
+      <div class="legend" id="zone-legend"></div>
+    </div>
+    <svg class="chart" id="zone-chart"></svg>
+    <div class="note">Background bands shade the daily β state per the V6.3V interpretation ladder: <b style="color:#15803d">High β (&ge; 0.75)</b> full RegimeTilt admissible, <b style="color:#65a30d">Medium β (0.50&ndash;0.75)</b> partial participation, <b style="color:#b45309">Low β (0.25&ndash;0.50)</b> heavy contraction toward Neutral, <b style="color:#dc2626">Defensive (&lt; 0.25)</b> survival geometry dominates. Solid line is β'<sub>t</sub> (V7.3 with Q polygons); dashed line is base β<sub>t</sub> (V6.3 throttle, before Q multiplication). Reference lines at 0.25 / 0.50 / 0.75.</div>
+  </section>
+
+  <section class="panel" id="polygon-panel" style="display:none;">
+    <div class="chart-head">
+      <h2>Qualifying polygons</h2>
+      <div>
+        <label class="subtle" for="polygon-select">Signal:&nbsp;</label>
+        <select id="polygon-select"></select>
+      </div>
+    </div>
+    <div class="polygon-grid" id="polygon-grid"></div>
+    <div class="note">Qualifying polygons run as observers in V7.2: their <code>observe()</code> emits state, <code>modify()</code> is identity. Future versions enable them to qualify, downgrade, block, or amplify allocation.</div>
+  </section>
+
+  <section class="panel">
+    <div class="chart-head">
+      <h2>Drawdown</h2>
+      <div class="legend" id="drawdown-legend"></div>
+    </div>
+    <svg class="chart" id="drawdown-chart"></svg>
+  </section>
+
+  <section class="panel">
+    <div class="chart-head">
+      <h2>Weight allocation over time</h2>
+      <div>
+        <label class="subtle" for="weights-select">Signal:&nbsp;</label>
+        <select id="weights-select"></select>
+      </div>
+    </div>
+    <svg class="chart weight-chart" id="weights-chart"></svg>
+    <div class="weight-legend" id="weights-legend"></div>
+    <div class="note" id="weights-note">Positive bars stack above 0 (long sleeve); negative bars stack below (short sleeve). Each asset band is split into a <b>direct</b> portion (solid color, from the strategy's admissibility on that asset) and a lighter <b>MOM</b> portion (translucent, from the Momentum 12-1 strategy's decomposition into that asset).</div>
+  </section>
+
+  <section class="panel" id="mom-section" style="display:none">
+    <div class="chart-head">
+      <h2>Momentum 12-1 — Internal Contribution</h2>
+    </div>
+    <svg class="chart weight-chart" id="mom-chart"></svg>
+    <div class="note">Per-asset slice of gross allocation driven by the Momentum 12-1 strategy (already embedded in the asset bands above as their lighter sub-bands). Black line shows the total Momentum gross weight w<sub>MOM</sub>(t).</div>
+  </section>
+</main>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script id="dashboard-data" type="application/json">__DATA__</script>
+<script>
+(function() {
+  const data = JSON.parse(document.getElementById("dashboard-data").textContent);
+  const tooltip = document.getElementById("tooltip");
+  const fmtPct = v => (v == null || isNaN(v)) ? "—" : (v >= 0 ? "+" : "") + (v * 100).toFixed(2) + "%";
+  const fmtNum = v => (v == null || isNaN(v)) ? "—" : v.toFixed(3);
+
+  document.getElementById("window-line").textContent =
+    "Window " + data.minDate + " → " + data.maxDate + " · " + data.universe.length + " assets";
+  document.getElementById("updated-line").textContent = "Generated " + data.generatedAt;
+
+  // ---------- Summary (recomputed on every range change) ----------
+  // All metrics derived from the equity curves in the payload — no server
+  // round-trip needed. Standard conventions:
+  //   total      = eq[-1] / eq[0] - 1
+  //   CAGR       = (eq[-1] / eq[0]) ** (252 / N) - 1
+  //   ann.vol    = std(daily_returns, ddof=1) * sqrt(252)
+  //   Sharpe     = mean(daily_returns) * 252 / ann.vol
+  //   max DD     = min(eq[t] / cummax(eq[..t]) - 1)
+  // Initial values match the payload's precomputed full-window stats up to
+  // small rounding (full-window N may differ by 1 if either end is missing).
+  const summaryTbody = document.querySelector("#summary-table tbody");
+
+  // Tracks which series are visible on the equity chart legend.
+  // Summary table filters by this so toggling a series on the chart also
+  // drops it from the table. `defaultVisibleSignals` from the payload
+  // narrows the initial-on set; anything outside the list is hidden but
+  // remains toggleable via the legend.
+  const equityVisible = {};
+  const _defaultVisible = data.defaultVisibleSignals || null;
+  function _isVisibleByDefault(name) {
+    return _defaultVisible ? _defaultVisible.includes(name) : true;
+  }
+  data.summary.forEach(r => { equityVisible[r.name] = _isVisibleByDefault(r.name); });
+
+  function metricsFromEquityWindow(pts) {
+    if (!pts || pts.length < 2) {
+      return { total: null, cagr: null, vol: null, sharpe: null,
+               sortino: null, calmar: null, maxDD: null };
+    }
+    const eq0 = pts[0].v, eqN = pts[pts.length - 1].v;
+    const total = eqN / eq0 - 1;
+    const N = pts.length;
+    const cagr = Math.pow(Math.max(eqN / eq0, 1e-12), 252 / N) - 1;
+
+    let sumR = 0;
+    const rets = new Array(N - 1);
+    for (let i = 1; i < N; i++) {
+      const r = pts[i].v / pts[i - 1].v - 1;
+      rets[i - 1] = r;
+      sumR += r;
+    }
+    const meanR = sumR / rets.length;
+    let sse = 0;
+    for (const r of rets) sse += (r - meanR) * (r - meanR);
+    const variance = rets.length > 1 ? sse / (rets.length - 1) : 0;
+    const vol = Math.sqrt(variance) * Math.sqrt(252);
+    const sharpe = vol > 0 ? (meanR * 252) / vol : null;
+
+    let peak = -Infinity, maxDD = 0;
+    for (const p of pts) {
+      if (p.v > peak) peak = p.v;
+      const dd = p.v / peak - 1;
+      if (dd < maxDD) maxDD = dd;
+    }
+
+    // Sortino: same numerator as Sharpe, but std restricted to negative returns
+    // (computed about their own mean, ddof=1 — matches pandas .std() in
+    // run_v76_check.py / _summary; not the MAR-zero convention).
+    // Undefined on windows with fewer than 2 negative returns.
+    let downSum = 0, downCount = 0;
+    for (const r of rets) if (r < 0) { downCount++; downSum += r; }
+    let sortino = null;
+    if (downCount > 1) {
+      const meanNeg = downSum / downCount;
+      let sse = 0;
+      for (const r of rets) if (r < 0) sse += (r - meanNeg) * (r - meanNeg);
+      const downStd = Math.sqrt(sse / (downCount - 1));
+      if (downStd > 0) sortino = (meanR * 252) / (downStd * Math.sqrt(252));
+    }
+
+    // Calmar: CAGR / |Max DD|. Undefined on flat curves.
+    const calmar = (maxDD < -1e-9) ? cagr / Math.abs(maxDD) : null;
+
+    return { total, cagr, vol, sharpe, sortino, calmar, maxDD };
+  }
+
+  // Click-to-sort state for the summary table.
+  // col === null → original registry order; otherwise sort by that key.
+  // For numeric metrics: nulls (e.g., Sharpe undefined on a flat curve) sort
+  // last regardless of direction, so a missing value doesn't crowd the top.
+  const sortState = { col: null, dir: 'desc' };
+
+  function compareRows(a, b) {
+    if (!sortState.col) return 0;
+    let av, bv;
+    if (sortState.col === 'label') { av = a.label; bv = b.label; }
+    else { av = a.metrics[sortState.col]; bv = b.metrics[sortState.col]; }
+    const aNull = av == null || (typeof av === 'number' && !isFinite(av));
+    const bNull = bv == null || (typeof bv === 'number' && !isFinite(bv));
+    if (aNull && bNull) return 0;
+    if (aNull) return 1;
+    if (bNull) return -1;
+    if (typeof av === 'string') {
+      return sortState.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    }
+    return sortState.dir === 'asc' ? av - bv : bv - av;
+  }
+
+  function recomputeSummary() {
+    const xmin = range.from, xmax = range.to;
+    const rows = data.summary.filter(r => equityVisible[r.name] !== false).map(r => {
+      const curve = data.curves.find(c => c.name === r.name);
+      const pts = curve
+        ? curve.points
+            .filter(p => { const t = parseDate(p.d); return t >= xmin && t <= xmax; })
+            .map(p => ({ d: p.d, v: p.v }))
+        : [];
+      return {
+        name: r.name,
+        label: r.label,
+        color: r.color,
+        info: r.info,
+        metrics: metricsFromEquityWindow(pts),
+      };
+    });
+    if (sortState.col) rows.sort(compareRows);
+
+    summaryTbody.innerHTML = "";
+    rows.forEach(r => {
+      const m = r.metrics;
+      const tr = document.createElement("tr");
+      const labelClass = r.info ? "has-info" : "";
+      tr.innerHTML =
+        `<td><span class="swatch" style="background:${r.color}"></span><span class="${labelClass}" data-signal-name="${r.name}">${r.label}</span></td>
+         <td class="num">${fmtPct(m.total)}</td>
+         <td class="num">${fmtPct(m.cagr)}</td>
+         <td class="num">${fmtPct(m.vol)}</td>
+         <td class="num sharpe-col">${fmtNum(m.sharpe)}</td>
+         <td class="num">${fmtNum(m.sortino)}</td>
+         <td class="num">${fmtNum(m.calmar)}</td>
+         <td class="num">${fmtPct(m.maxDD)}</td>`;
+      summaryTbody.appendChild(tr);
+    });
+    // After (re)render, rebind hover tooltips (the .has-info spans were just
+    // rebuilt — old listeners are gone with the old DOM).
+    bindInfoTooltips(summaryTbody);
+
+    // Visual sort indicators (▲ / ▼) on the active column header.
+    document.querySelectorAll('#summary-table th[data-sort-key]').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (sortState.col === th.dataset.sortKey) {
+        th.classList.add('sort-' + sortState.dir);
+      }
+    });
+  }
+
+  // Wire click handlers on summary headers. First click on a column sorts it
+  // descending (best-first for numerics, A→Z for the Series label). Repeat
+  // clicks toggle direction. Clicking a different column resets to default.
+  document.querySelectorAll('#summary-table th[data-sort-key]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sortKey;
+      if (sortState.col === key) {
+        sortState.dir = sortState.dir === 'desc' ? 'asc' : 'desc';
+      } else {
+        sortState.col = key;
+        sortState.dir = (key === 'label') ? 'asc' : 'desc';
+      }
+      recomputeSummary();
+    });
+  });
+
+  // ---------- Time index ----------
+  function parseDate(s) { return new Date(s + "T00:00:00Z").getTime(); }
+  function hexToRgba(hex, alpha) {
+    const h = (hex || "#000000").replace("#", "");
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+  function fmtDateISO(t) {
+    const d = new Date(t);
+    return d.getUTCFullYear() + "-" +
+      String(d.getUTCMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getUTCDate()).padStart(2, "0");
+  }
+
+  const fullFrom = parseDate(data.minDate);
+  const fullTo = parseDate(data.maxDate);
+  const range = { from: fullFrom, to: fullTo };
+  const PAD = { l: 60, r: 14, t: 14, b: 28 };
+
+  // ---------- Signal-info tooltip ----------
+  // Hover any element with class `has-info` and `data-signal-name="<name>"`
+  // and we render an extended-description tooltip looked up from
+  // data.summary[*].info / data.curves[*].info. Signal-info text is plain
+  // text (no HTML) for safety — escape on render.
+  //
+  // Defined BEFORE the first recomputeSummary() call below — recomputeSummary
+  // calls bindInfoTooltips() and accesses infoLookup/infoTooltip via closure.
+  // Those are `const`-declared so they'd hit a temporal-dead-zone ReferenceError
+  // if this block sat after the first invocation (which would silently abort
+  // the rest of the IIFE — no charts, no toolbar, no presets).
+  const infoTooltip = document.createElement("div");
+  infoTooltip.className = "info-tooltip";
+  document.body.appendChild(infoTooltip);
+  const infoLookup = {};
+  (data.summary || []).forEach(s => {
+    if (s.info) infoLookup[s.name] = { label: s.label, info: s.info };
+  });
+  (data.curves || []).forEach(c => {
+    if (c.info && !infoLookup[c.name]) infoLookup[c.name] = { label: c.label, info: c.info };
+  });
+  function _escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function _positionInfoTooltip(ev) {
+    // Right-align if too close to viewport edge.
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const offX = 14, offY = 14;
+    let x = ev.clientX + offX;
+    let y = ev.clientY + offY;
+    const rect = infoTooltip.getBoundingClientRect();
+    if (x + rect.width + 8 > vw) x = ev.clientX - rect.width - offX;
+    if (y + rect.height + 8 > vh) y = ev.clientY - rect.height - offY;
+    infoTooltip.style.left = Math.max(8, x) + "px";
+    infoTooltip.style.top = Math.max(8, y) + "px";
+  }
+  function bindInfoTooltips(rootEl) {
+    if (!rootEl) return;
+    rootEl.querySelectorAll("[data-signal-name]").forEach(el => {
+      const name = el.getAttribute("data-signal-name");
+      const entry = infoLookup[name];
+      if (!entry) return;
+      el.classList.add("has-info");
+      el.addEventListener("mouseenter", ev => {
+        infoTooltip.innerHTML =
+          `<div class="head">${_escapeHtml(entry.label)}</div>` +
+          `<div class="body">${_escapeHtml(entry.info)}</div>`;
+        infoTooltip.style.display = "block";
+        _positionInfoTooltip(ev);
+      });
+      el.addEventListener("mousemove", _positionInfoTooltip);
+      el.addEventListener("mouseleave", () => { infoTooltip.style.display = "none"; });
+    });
+  }
+
+  // Hooks for range-aware redraws (each chart registers its render() here).
+  const redraws = [];
+  function renderAll() { redraws.forEach(fn => fn()); }
+
+  // Summary metrics recompute on every range change (purely client-side).
+  recomputeSummary();
+  redraws.push(recomputeSummary);
+
+  // ---------- Toolbar wiring ----------
+  const fromInput = document.getElementById("from-date");
+  const toInput = document.getElementById("to-date");
+  fromInput.min = data.minDate; fromInput.max = data.maxDate;
+  toInput.min = data.minDate; toInput.max = data.maxDate;
+  fromInput.value = data.minDate;
+  toInput.value = data.maxDate;
+  function syncFromInputs() {
+    const f = parseDate(fromInput.value);
+    const t = parseDate(toInput.value);
+    if (!isFinite(f) || !isFinite(t) || t <= f) return;
+    range.from = f; range.to = t;
+    renderAll();
+  }
+  fromInput.addEventListener("change", syncFromInputs);
+  toInput.addEventListener("change", syncFromInputs);
+  document.getElementById("reset-range").addEventListener("click", () => {
+    range.from = fullFrom; range.to = fullTo;
+    fromInput.value = data.minDate; toInput.value = data.maxDate;
+    setActivePreset(null);
+    renderAll();
+  });
+
+  // ---------- Time-range presets ----------
+  // Each entry: { label: string, from: ISO date, to: ISO date }. Clipped to
+  // [data.minDate, data.maxDate] so a preset that extends past the data
+  // (e.g. "Last 3 years" computed from today) still snaps to a valid window.
+  const presetsEl = document.getElementById("range-presets");
+  const rangePresets = (data.timeRangePresets || []).map(p => {
+    const fIso = (p.from < data.minDate) ? data.minDate : p.from;
+    const tIso = (p.to > data.maxDate) ? data.maxDate : p.to;
+    return { label: p.label, fromIso: fIso, toIso: tIso,
+             fromT: parseDate(fIso), toT: parseDate(tIso) };
+  }).filter(p => p.toT > p.fromT);
+  function setActivePreset(label) {
+    presetsEl.querySelectorAll(".preset-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.label === label);
+    });
+  }
+  rangePresets.forEach(p => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "preset-btn";
+    b.textContent = p.label;
+    b.dataset.label = p.label;
+    b.title = p.fromIso + " → " + p.toIso;
+    b.addEventListener("click", () => {
+      range.from = p.fromT; range.to = p.toT;
+      fromInput.value = p.fromIso; toInput.value = p.toIso;
+      setActivePreset(p.label);
+      renderAll();
+    });
+    presetsEl.appendChild(b);
+  });
+  // From/To inputs and chart-brush both clear the active-preset highlight,
+  // since the resulting window is no longer identical to any preset.
+  const _origSync = syncFromInputs;
+  fromInput.removeEventListener("change", _origSync);
+  toInput.removeEventListener("change", _origSync);
+  function syncFromInputsAndClearPreset() { setActivePreset(null); _origSync(); }
+  fromInput.addEventListener("change", syncFromInputsAndClearPreset);
+  toInput.addEventListener("change", syncFromInputsAndClearPreset);
+
+  // ---------- Brush attach ----------
+  function attachBrush(svg) {
+    let dragging = false, startX = 0, rectEl = null;
+    function localX(ev) {
+      const r = svg.getBoundingClientRect();
+      return Math.max(PAD.l, Math.min(r.width - PAD.r, ev.clientX - r.left));
+    }
+    function clearRect() { if (rectEl) { rectEl.remove(); rectEl = null; } }
+    svg.addEventListener("pointerdown", ev => {
+      if (ev.button !== 0) return;
+      dragging = true;
+      startX = localX(ev);
+      try { svg.setPointerCapture(ev.pointerId); } catch (_) {}
+      clearRect();
+      rectEl = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rectEl.setAttribute("class", "brush-rect");
+      const h = svg.clientHeight;
+      rectEl.setAttribute("x", startX);
+      rectEl.setAttribute("y", PAD.t);
+      rectEl.setAttribute("width", 0);
+      rectEl.setAttribute("height", h - PAD.t - PAD.b);
+      svg.appendChild(rectEl);
+      ev.preventDefault();
+    });
+    svg.addEventListener("pointermove", ev => {
+      if (!dragging || !rectEl) return;
+      const cur = localX(ev);
+      rectEl.setAttribute("x", Math.min(startX, cur));
+      rectEl.setAttribute("width", Math.abs(cur - startX));
+    });
+    function commit(ev) {
+      if (!dragging) return;
+      dragging = false;
+      const endX = localX(ev);
+      clearRect();
+      if (Math.abs(endX - startX) < 4) return;
+      const w = svg.clientWidth;
+      const span = range.to - range.from;
+      const fracA = (Math.min(startX, endX) - PAD.l) / Math.max(w - PAD.l - PAD.r, 1);
+      const fracB = (Math.max(startX, endX) - PAD.l) / Math.max(w - PAD.l - PAD.r, 1);
+      const tA = range.from + fracA * span;
+      const tB = range.from + fracB * span;
+      if (tB - tA < 86400000) return; // ignore selections shorter than 1 day
+      range.from = tA; range.to = tB;
+      fromInput.value = fmtDateISO(tA);
+      toInput.value = fmtDateISO(tB);
+      setActivePreset(null);
+      renderAll();
+    }
+    svg.addEventListener("pointerup", commit);
+    svg.addEventListener("pointercancel", () => { dragging = false; clearRect(); });
+    svg.addEventListener("dblclick", () => {
+      range.from = fullFrom; range.to = fullTo;
+      fromInput.value = data.minDate; toInput.value = data.maxDate;
+      setActivePreset(null);
+      renderAll();
+    });
+  }
+
+  function unionDates(series) {
+    const set = new Set();
+    series.forEach(s => s.points.forEach(p => set.add(p.d)));
+    return Array.from(set).sort();
+  }
+
+  // V7.3 β-band classification — module-scoped so any chart can paint
+  // background bands keyed off a V7.3 signal's diagnostic rows.
+  function betaBand(b) {
+    if (b >= 0.75) return "high";
+    if (b >= 0.50) return "medium";
+    if (b >= 0.25) return "low";
+    return "defensive";
+  }
+  function betaBandLabel(b) {
+    if (b >= 0.75) return "High β";
+    if (b >= 0.50) return "Medium β";
+    if (b >= 0.25) return "Low β";
+    return "Defensive";
+  }
+
+  function buildLineChart(svgId, legendId, series, valueFmt, yPad, bgBands, opts) {
+    opts = opts || {};
+    // rebase: 'equity' → divide each window's points by the first window y
+    //                   so all curves start at 1.0 at the visible left edge.
+    // rebase: 'drawdown' → treat input as equity, compute drawdown vs the
+    //                     running window-local peak (so dd starts at 0).
+    // undefined → plot raw points.
+    const rebaseMode = opts.rebase;
+    // Optional: fires after the user toggles a series via the legend.
+    // Receives (name, isVisible). Lets external panels (e.g. the Summary
+    // table) mirror the visibility set chosen on this chart.
+    const onLegendToggle = opts.onLegendToggle;
+    const svg = document.getElementById(svgId);
+    const legendEl = document.getElementById(legendId);
+    const visible = {};
+    series.forEach(s => visible[s.name] = _isVisibleByDefault(s.name));
+
+    function visiblePoints(s) {
+      return s.points.map(p => ({ x: parseDate(p.d), y: p.v, d: p.d }));
+    }
+    const lookups = new Map(series.map(s => [s.name, visiblePoints(s)]));
+
+    function rebasedWindowPts(allPts, xmin, xmax) {
+      const pts = allPts.filter(p => p.x >= xmin && p.x <= xmax);
+      if (!pts.length) return pts;
+      if (rebaseMode === 'equity') {
+        const base = pts[0].y;
+        if (!base) return pts;
+        return pts.map(p => ({ x: p.x, y: p.y / base, d: p.d }));
+      }
+      if (rebaseMode === 'drawdown') {
+        let peak = -Infinity;
+        return pts.map(p => {
+          if (p.y > peak) peak = p.y;
+          return { x: p.x, y: peak ? p.y / peak - 1 : 0, d: p.d };
+        });
+      }
+      return pts;
+    }
+
+    function render() {
+      const w = svg.clientWidth, h = svg.clientHeight;
+      const pad = PAD;
+      const xmin = range.from, xmax = range.to;
+      const winPts = new Map();
+      const xs = [], ys = [];
+      series.forEach(s => {
+        const pts = visible[s.name]
+          ? rebasedWindowPts(lookups.get(s.name), xmin, xmax)
+          : [];
+        winPts.set(s.name, pts);
+        pts.forEach(p => { xs.push(p.x); ys.push(p.y); });
+      });
+      if (!xs.length) { svg.innerHTML = ""; return; }
+      let ymin = Math.min(...ys), ymax = Math.max(...ys);
+      const span = Math.max(ymax - ymin, 1e-9);
+      ymin -= span * yPad;
+      ymax += span * yPad;
+      const sx = v => pad.l + (w - pad.l - pad.r) * (v - xmin) / Math.max(xmax - xmin, 1);
+      const sy = v => pad.t + (h - pad.t - pad.b) * (1 - (v - ymin) / Math.max(ymax - ymin, 1e-9));
+
+      let svgStr = "";
+
+      // V7.3 β background bands — drawn first so grid + lines layer on top.
+      // Caller passes a V7.3 signal's diagnostic rows ({d, beta_prime, ...}).
+      if (bgBands && bgBands.length) {
+        let i = 0;
+        while (i < bgBands.length) {
+          const t0 = parseDate(bgBands[i].d);
+          if (t0 > xmax) break;
+          const bI = betaBand(bgBands[i].beta_prime);
+          let j = i;
+          while (j + 1 < bgBands.length) {
+            const tNext = parseDate(bgBands[j + 1].d);
+            if (tNext > xmax) break;
+            if (betaBand(bgBands[j + 1].beta_prime) !== bI) break;
+            j++;
+          }
+          if (parseDate(bgBands[j].d) >= xmin) {
+            const x0 = Math.max(pad.l, sx(t0));
+            const x1 = Math.min(w - pad.r, sx(parseDate(bgBands[j].d)));
+            if (x1 > x0) {
+              svgStr += `<rect x="${x0}" y="${pad.t}" width="${x1 - x0}" height="${h - pad.t - pad.b}" class="beta-band-${bI}"/>`;
+            }
+          }
+          i = j + 1;
+        }
+      }
+
+      // y-grid + labels
+      const ySteps = 5;
+      for (let i = 0; i <= ySteps; i++) {
+        const v = ymin + (ymax - ymin) * i / ySteps;
+        const y = sy(v);
+        svgStr += `<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" stroke="#e8edf3"/>`;
+        svgStr += `<text x="${pad.l - 6}" y="${y + 4}" font-size="11" fill="#687386" text-anchor="end" font-variant-numeric="tabular-nums">${valueFmt(v)}</text>`;
+      }
+      // x-axis labels (year ticks)
+      const yearStart = new Date(xmin).getUTCFullYear();
+      const yearEnd = new Date(xmax).getUTCFullYear();
+      for (let yr = yearStart; yr <= yearEnd; yr++) {
+        const t = Date.UTC(yr, 0, 1);
+        if (t < xmin || t > xmax) continue;
+        const x = sx(t);
+        svgStr += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${h - pad.b}" stroke="#e8edf3"/>`;
+        svgStr += `<text x="${x}" y="${h - pad.b + 16}" font-size="11" fill="#687386" text-anchor="middle">${yr}</text>`;
+      }
+      // lines (already filtered + rebased into winPts above)
+      series.forEach(s => {
+        if (!visible[s.name]) return;
+        const pts = winPts.get(s.name);
+        if (!pts.length) return;
+        let d = "";
+        pts.forEach((p, i) => {
+          d += (i === 0 ? "M" : "L") + sx(p.x).toFixed(1) + "," + sy(p.y).toFixed(1);
+        });
+        svgStr += `<path d="${d}" stroke="${s.color}" stroke-width="1.5" fill="none"/>`;
+      });
+      // hover overlay
+      svgStr += `<rect x="${pad.l}" y="${pad.t}" width="${w - pad.l - pad.r}" height="${h - pad.t - pad.b}" fill="transparent" id="${svgId}-hover"/>`;
+      svg.innerHTML = svgStr;
+
+      // hover handler
+      const overlay = document.getElementById(svgId + "-hover");
+      overlay.addEventListener("mousemove", e => {
+        const rect = svg.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const xt = xmin + (xmax - xmin) * (px - pad.l) / Math.max(w - pad.l - pad.r, 1);
+        // find nearest point
+        const lines = [];
+        series.forEach(s => {
+          if (!visible[s.name]) return;
+          const pts = winPts.get(s.name);
+          let best = null, bestDist = Infinity;
+          pts.forEach(p => {
+            const dist = Math.abs(p.x - xt);
+            if (dist < bestDist) { bestDist = dist; best = p; }
+          });
+          if (best) lines.push({ name: s.label, color: s.color, value: best.y, date: best.d });
+        });
+        if (!lines.length) { tooltip.style.display = "none"; return; }
+        let html = `<div class="row head"><span>${lines[0].date}</span></div>`;
+        lines.forEach(l => {
+          html += `<div class="row"><span class="name"><span class="dot" style="background:${l.color}"></span>${l.name}</span><span>${valueFmt(l.value)}</span></div>`;
+        });
+        tooltip.innerHTML = html;
+        tooltip.style.display = "block";
+        tooltip.style.left = (e.clientX + 12) + "px";
+        tooltip.style.top = (e.clientY + 12) + "px";
+      });
+      overlay.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+    }
+
+    function renderLegend() {
+      legendEl.innerHTML = "";
+      series.forEach(s => {
+        const el = document.createElement("span");
+        el.className = "legend-item" + (visible[s.name] ? "" : " off");
+        el.setAttribute("data-signal-name", s.name);
+        el.innerHTML = `<span class="dot" style="background:${s.color}"></span>${s.label}`;
+        el.addEventListener("click", () => {
+          visible[s.name] = !visible[s.name];
+          renderLegend();
+          render();
+          if (onLegendToggle) onLegendToggle(s.name, visible[s.name]);
+        });
+        legendEl.appendChild(el);
+      });
+      bindInfoTooltips(legendEl);
+    }
+
+    renderLegend();
+    render();
+    redraws.push(render);
+    attachBrush(svg);
+    window.addEventListener("resize", render);
+  }
+
+  // V7.3 default's β'_t timeseries provides the equity-chart background bands.
+  const v73DefaultBands = (data.diagnostics && data.diagnostics.v73)
+    ? data.diagnostics.v73.rows
+    : null;
+  buildLineChart("equity-chart", "equity-legend", data.curves,
+    v => v.toFixed(2) + "x", 0.05, v73DefaultBands, {
+      rebase: 'equity',
+      onLegendToggle: (name, isVisible) => {
+        equityVisible[name] = isVisible;
+        recomputeSummary();
+      },
+    });
+  if (v73DefaultBands && v73DefaultBands.length) {
+    document.getElementById("equity-band-note").innerHTML =
+      'Background bands shade the daily β′<sub>t</sub> state of <b>V7.3 default</b>: ' +
+      '<b style="color:#15803d">High β</b> (≥ 0.75), ' +
+      '<b style="color:#65a30d">Medium β</b> (0.50–0.75), ' +
+      '<b style="color:#b45309">Low β</b> (0.25–0.50), ' +
+      '<b style="color:#dc2626">Defensive</b> (< 0.25). ' +
+      'Hover any line for date / value tooltip.';
+  }
+  // Drawdown chart consumes the equity curves and computes drawdown vs the
+  // window-local peak, so the curve resets to 0 at the visible left edge
+  // instead of inheriting the global cummax from before the window.
+  buildLineChart("drawdown-chart", "drawdown-legend", data.curves,
+    v => (v * 100).toFixed(0) + "%", 0.05, null, { rebase: 'drawdown' });
+
+  // ---------- Weights stacked area ----------
+  const weightsSelect = document.getElementById("weights-select");
+  Object.keys(data.weights).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = data.summary.find(s => s.name === name)?.label || name;
+    weightsSelect.appendChild(opt);
+  });
+  // Default to engine-suggested signal, else first available.
+  const defaultSig = data.defaultWeightsSignal;
+  if (defaultSig && data.weights[defaultSig]) {
+    weightsSelect.value = defaultSig;
+  } else if (Object.keys(data.weights).length) {
+    weightsSelect.value = Object.keys(data.weights)[0];
+  }
+
+  function renderWeights() {
+    const name = weightsSelect.value;
+    const allRows = data.weights[name];
+    const svg = document.getElementById("weights-chart");
+    const legendEl = document.getElementById("weights-legend");
+    if (!allRows || !allRows.length) { svg.innerHTML = ""; legendEl.innerHTML = ""; return; }
+
+    // filter to current range
+    const rows = allRows.filter(r => {
+      const t = parseDate(r.d);
+      return t >= range.from && t <= range.to;
+    });
+    if (!rows.length) { svg.innerHTML = ""; legendEl.innerHTML = ""; return; }
+
+    // Per-asset MOM contribution panel (V7.4+ strategy-eigenfield signals
+    // only — absent for v74b_template, baselines, v73). Aligned to `rows`
+    // by date for split-band rendering.
+    const momAll = (data.weightsMom && data.weightsMom[name]) || null;
+    const momByDate = {};
+    if (momAll) {
+      momAll.forEach(mr => { momByDate[mr.d] = mr; });
+    }
+    const hasMom = !!momAll;
+
+    const w = svg.clientWidth, h = svg.clientHeight;
+    const pad = PAD;
+    const xs = rows.map(r => parseDate(r.d));
+    const xmin = range.from, xmax = range.to;
+
+    // separate long and short stacks
+    let posMax = 0, negMin = 0;
+    rows.forEach(r => {
+      let pos = 0, neg = 0;
+      data.universe.forEach(a => {
+        const v = r[a] || 0;
+        if (v >= 0) pos += v; else neg += v;
+      });
+      if (pos > posMax) posMax = pos;
+      if (neg < negMin) negMin = neg;
+    });
+    const ymin = Math.min(negMin * 1.05, -0.05);
+    const ymax = Math.max(posMax * 1.05, 1.05);
+
+    const sx = v => pad.l + (w - pad.l - pad.r) * (v - xmin) / Math.max(xmax - xmin, 1);
+    const sy = v => pad.t + (h - pad.t - pad.b) * (1 - (v - ymin) / Math.max(ymax - ymin, 1e-9));
+
+    let svgStr = "";
+    const ySteps = 5;
+    for (let i = 0; i <= ySteps; i++) {
+      const v = ymin + (ymax - ymin) * i / ySteps;
+      const y = sy(v);
+      svgStr += `<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" stroke="#e8edf3"/>`;
+      svgStr += `<text x="${pad.l - 6}" y="${y + 4}" font-size="11" fill="#687386" text-anchor="end" font-variant-numeric="tabular-nums">${(v * 100).toFixed(0)}%</text>`;
+    }
+    const y0 = sy(0);
+    svgStr += `<line x1="${pad.l}" y1="${y0}" x2="${w - pad.r}" y2="${y0}" stroke="#9ca3af" stroke-dasharray="2,2"/>`;
+
+    const yearStart = new Date(xmin).getUTCFullYear();
+    const yearEnd = new Date(xmax).getUTCFullYear();
+    for (let yr = yearStart; yr <= yearEnd; yr++) {
+      const t = Date.UTC(yr, 0, 1);
+      if (t < xmin || t > xmax) continue;
+      const x = sx(t);
+      svgStr += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${h - pad.b}" stroke="#e8edf3"/>`;
+      svgStr += `<text x="${x}" y="${h - pad.b + 16}" font-size="11" fill="#687386" text-anchor="middle">${yr}</text>`;
+    }
+
+    // For each asset draw a layered band split into direct + MOM sub-bands.
+    // The direct portion (v - mom) renders in the asset's solid color; the
+    // MOM portion renders in the same hue at 40% opacity, stacked above the
+    // direct portion. Short bands aren't split because MOM is long-only.
+    const longCum = rows.map(() => 0);
+    const shortCum = rows.map(() => 0);
+
+    function bandPath(top, bot) {
+      let d = "";
+      for (let i = 0; i < rows.length; i++) {
+        const x = sx(xs[i]);
+        d += (i === 0 ? "M" : "L") + x.toFixed(1) + "," + sy(top[i]).toFixed(1);
+      }
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const x = sx(xs[i]);
+        d += "L" + x.toFixed(1) + "," + sy(bot[i]).toFixed(1);
+      }
+      d += "Z";
+      return d;
+    }
+
+    data.universe.forEach(asset => {
+      const color = data.assetColors[asset] || "#475569";
+      const directTop = [];
+      const directBot = [];
+      const momTop = [];
+      const momBot = [];
+      const shortTop = [];
+      const shortBot = [];
+      rows.forEach((r, i) => {
+        const v = r[asset] || 0;
+        const momRow = hasMom ? momByDate[r.d] : null;
+        const mom = momRow ? (momRow[asset] || 0) : 0;
+        if (v >= 0) {
+          // Show the MOM portion only up to v (defensive against tiny
+          // floating-point overshoot from decomposition rounding).
+          const momShown = Math.max(0, Math.min(mom, v));
+          const direct = v - momShown;
+          directBot.push(longCum[i]);
+          longCum[i] += direct;
+          directTop.push(longCum[i]);
+          momBot.push(longCum[i]);
+          longCum[i] += momShown;
+          momTop.push(longCum[i]);
+          shortTop.push(shortCum[i]);
+          shortBot.push(shortCum[i]);
+        } else {
+          // Negative weight — single short band, no MOM split.
+          directTop.push(longCum[i]);
+          directBot.push(longCum[i]);
+          momTop.push(longCum[i]);
+          momBot.push(longCum[i]);
+          shortBot.push(shortCum[i]);
+          shortCum[i] += v;
+          shortTop.push(shortCum[i]);
+        }
+      });
+      svgStr += `<path d="${bandPath(directTop, directBot)}" fill="${color}" fill-opacity="0.85" stroke="none"/>`;
+      svgStr += `<path d="${bandPath(momTop, momBot)}" fill="${color}" fill-opacity="0.40" stroke="none"/>`;
+      svgStr += `<path d="${bandPath(shortTop, shortBot)}" fill="${color}" fill-opacity="0.55" stroke="none"/>`;
+    });
+
+    // hover overlay
+    svgStr += `<rect x="${pad.l}" y="${pad.t}" width="${w - pad.l - pad.r}" height="${h - pad.t - pad.b}" fill="transparent" id="weights-hover"/>`;
+    svg.innerHTML = svgStr;
+
+    const overlay = document.getElementById("weights-hover");
+    overlay.addEventListener("mousemove", e => {
+      const rect = svg.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const xt = xmin + (xmax - xmin) * (px - pad.l) / Math.max(w - pad.l - pad.r, 1);
+      let bestI = 0, bestDist = Infinity;
+      xs.forEach((x, i) => {
+        const dist = Math.abs(x - xt);
+        if (dist < bestDist) { bestDist = dist; bestI = i; }
+      });
+      const r = rows[bestI];
+      const momRow = hasMom ? momByDate[r.d] : null;
+      const sorted = data.universe.slice().sort((a, b) => Math.abs(r[b] || 0) - Math.abs(r[a] || 0));
+      let html = `<div class="row head"><span>${r.d}</span><span></span></div>`;
+      let totalMom = 0;
+      let count = 0;
+      sorted.forEach(asset => {
+        const v = r[asset] || 0;
+        if (Math.abs(v) < 1e-4 || count >= 8) return;
+        count++;
+        const color = data.assetColors[asset] || "#475569";
+        const mom = momRow ? (momRow[asset] || 0) : 0;
+        totalMom += mom;
+        const showSplit = mom > 1e-4 && v > 0;
+        const direct = v - mom;
+        let breakdown = "";
+        if (showSplit) {
+          // Solid swatch for direct, lighter swatch for MOM — matches band rendering.
+          breakdown =
+            `<span class="breakdown">` +
+              `<span class="swatch" style="background:${color}"></span>${(direct * 100).toFixed(1)}% direct` +
+              `<span class="swatch" style="background:${hexToRgba(color, 0.40)}"></span>${(mom * 100).toFixed(1)}% MOM` +
+            `</span>`;
+        }
+        html +=
+          `<div class="row">` +
+            `<span class="name"><span class="dot" style="background:${color}"></span>${asset}</span>` +
+            `<span class="val">${(v * 100).toFixed(1)}%${breakdown}</span>` +
+          `</div>`;
+      });
+      // Footer with total MOM gross when MOM data is available.
+      if (hasMom && totalMom > 1e-4) {
+        html +=
+          `<div class="row" style="border-top:1px solid var(--border); margin-top:4px; padding-top:4px; color:var(--muted)">` +
+            `<span>w<sub>MOM</sub> total</span><span>${(totalMom * 100).toFixed(1)}%</span>` +
+          `</div>`;
+      }
+      tooltip.innerHTML = html;
+      tooltip.style.display = "block";
+      tooltip.style.left = (e.clientX + 12) + "px";
+      tooltip.style.top = (e.clientY + 12) + "px";
+    });
+    overlay.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+
+    const directLegend = data.universe.map(a =>
+      `<span><span class="dot" style="background:${data.assetColors[a]}"></span>${a}</span>`
+    ).join("");
+    // When the current signal has MOM data, append a second group of
+    // legend entries showing the lighter MOM swatch per asset. Matches
+    // the band rendering (asset solid + asset at 40% opacity).
+    const momLegend = hasMom
+      ? `<span class="legend-sep" aria-hidden="true"></span>` +
+        data.universe.map(a => {
+          const c = data.assetColors[a] || "#475569";
+          return `<span><span class="dot" style="background:${hexToRgba(c, 0.40)}"></span>MOM·${a}</span>`;
+        }).join("")
+      : "";
+    legendEl.innerHTML = directLegend + momLegend;
+  }
+
+  weightsSelect.addEventListener("change", renderWeights);
+  renderWeights();
+  redraws.push(renderWeights);
+  attachBrush(document.getElementById("weights-chart"));
+  window.addEventListener("resize", renderWeights);
+
+  // -----------------------------------------------------------------
+  // Auxiliary MOM chart — stacked per-asset MOM contribution + total line.
+  // Visible only when the selected signal has MOM data (V7.4+ strategy-
+  // eigenfield branches; absent for v74b_template / v73 / baselines).
+  // -----------------------------------------------------------------
+  function renderMom() {
+    const section = document.getElementById("mom-section");
+    const name = weightsSelect.value;
+    const momAll = (data.weightsMom && data.weightsMom[name]) || null;
+    const svg = document.getElementById("mom-chart");
+    if (!momAll || !momAll.length) {
+      section.style.display = "none";
+      svg.innerHTML = "";
+      return;
+    }
+    section.style.display = "";
+
+    const rows = momAll.filter(r => {
+      const t = parseDate(r.d);
+      return t >= range.from && t <= range.to;
+    });
+    if (!rows.length) { svg.innerHTML = ""; return; }
+
+    const w = svg.clientWidth, h = svg.clientHeight;
+    const pad = PAD;
+    const xs = rows.map(r => parseDate(r.d));
+    const xmin = range.from, xmax = range.to;
+
+    let ymax = 0;
+    rows.forEach(r => {
+      let sum = 0;
+      data.universe.forEach(a => { sum += Math.max(0, r[a] || 0); });
+      if (sum > ymax) ymax = sum;
+    });
+    ymax = Math.max(ymax * 1.10, 0.05);
+
+    const sx = v => pad.l + (w - pad.l - pad.r) * (v - xmin) / Math.max(xmax - xmin, 1);
+    const sy = v => pad.t + (h - pad.t - pad.b) * (1 - v / Math.max(ymax, 1e-9));
+
+    let svgStr = "";
+    const ySteps = 4;
+    for (let i = 0; i <= ySteps; i++) {
+      const v = ymax * i / ySteps;
+      const y = sy(v);
+      svgStr += `<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" stroke="#e8edf3"/>`;
+      svgStr += `<text x="${pad.l - 6}" y="${y + 4}" font-size="11" fill="#687386" text-anchor="end" font-variant-numeric="tabular-nums">${(v * 100).toFixed(1)}%</text>`;
+    }
+    const yearStart = new Date(xmin).getUTCFullYear();
+    const yearEnd = new Date(xmax).getUTCFullYear();
+    for (let yr = yearStart; yr <= yearEnd; yr++) {
+      const t = Date.UTC(yr, 0, 1);
+      if (t < xmin || t > xmax) continue;
+      const x = sx(t);
+      svgStr += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${h - pad.b}" stroke="#e8edf3"/>`;
+      svgStr += `<text x="${x}" y="${h - pad.b + 16}" font-size="11" fill="#687386" text-anchor="middle">${yr}</text>`;
+    }
+
+    const cum = rows.map(() => 0);
+    function momBandPath(top, bot) {
+      let d = "";
+      for (let i = 0; i < rows.length; i++) {
+        const x = sx(xs[i]);
+        d += (i === 0 ? "M" : "L") + x.toFixed(1) + "," + sy(top[i]).toFixed(1);
+      }
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const x = sx(xs[i]);
+        d += "L" + x.toFixed(1) + "," + sy(bot[i]).toFixed(1);
+      }
+      d += "Z";
+      return d;
+    }
+    data.universe.forEach(asset => {
+      const color = data.assetColors[asset] || "#475569";
+      const top = [];
+      const bot = [];
+      rows.forEach((r, i) => {
+        const v = Math.max(0, r[asset] || 0);
+        bot.push(cum[i]);
+        cum[i] += v;
+        top.push(cum[i]);
+      });
+      svgStr += `<path d="${momBandPath(top, bot)}" fill="${color}" fill-opacity="0.85" stroke="none"/>`;
+    });
+
+    // Total line on top of the stack (w_MOM = sum of per-asset contributions).
+    let linePath = "";
+    rows.forEach((r, i) => {
+      const x = sx(xs[i]);
+      const y = sy(cum[i]);
+      linePath += (i === 0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1);
+    });
+    svgStr += `<path d="${linePath}" fill="none" stroke="#1f2937" stroke-width="1.4"/>`;
+
+    svg.innerHTML = svgStr;
+  }
+  weightsSelect.addEventListener("change", renderMom);
+  renderMom();
+  redraws.push(renderMom);
+  window.addEventListener("resize", renderMom);
+
+  // -----------------------------------------------------------------
+  // V7.5 (c) Driving Mode — Driver Presets panel
+  // -----------------------------------------------------------------
+  const presets = data.driverPresets || [];
+  if (presets.length > 0) {
+    document.getElementById("driver-presets-panel").style.display = "";
+    const tbody = document.getElementById("driver-presets-tbody");
+    presets.forEach(p => {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td><span class="swatch" style="background:${p.color}"></span>${p.label}</td>
+         <td class="num">${p.convexity_preference.toFixed(2)}</td>
+         <td class="num">${p.carry_preference.toFixed(2)}</td>
+         <td class="num">${p.boundary_sensitivity.toFixed(2)}</td>
+         <td class="num">${p.recovery_aggression.toFixed(2)}</td>
+         <td class="num">${(p.max_defensive_contraction * 100).toFixed(0)}%</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // -----------------------------------------------------------------
+  // V7.3 Engine diagnostics: KPI strip + β admissibility timeline
+  // Renders only when at least one signal carries V7.3 β diagnostics.
+  // (betaBand / betaBandLabel are defined at module scope above.)
+  // -----------------------------------------------------------------
+  const diagPanelKpi = document.getElementById("diag-kpi-panel");
+  const diagPanelZone = document.getElementById("diag-zone-panel");
+  const diagSelect = document.getElementById("diag-select");
+  const diagNames = Object.keys(data.diagnostics || {});
+  // Filter to V7.3 signals (those with beta_prime in their first row).
+  const v73Names = diagNames.filter(n =>
+    data.diagnostics[n].rows.length > 0 &&
+    data.diagnostics[n].rows[0].beta_prime !== undefined
+  );
+
+  if (v73Names.length > 0) {
+    diagPanelKpi.style.display = "";
+    diagPanelZone.style.display = "";
+    v73Names.forEach(n => {
+      const opt = document.createElement("option");
+      opt.value = n;
+      opt.textContent = data.diagnostics[n].label || n;
+      diagSelect.appendChild(opt);
+    });
+
+    const BETA_BAND_COLORS = {
+      high: "#15803d", medium: "#65a30d", low: "#b45309", defensive: "#dc2626"
+    };
+    const zoneLegendEl = document.getElementById("zone-legend");
+    zoneLegendEl.innerHTML = "";
+    [
+      ["high",      "High β"],
+      ["medium",    "Medium β"],
+      ["low",       "Low β"],
+      ["defensive", "Defensive"],
+      ["bp",        "β'ₜ (V7.3)"],
+      ["b",         "βₜ (V6.3 base)"],
+    ].forEach(([k, lbl]) => {
+      const pill = document.createElement("span");
+      pill.className = "legend-item";
+      pill.style.cursor = "default";
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      if (k === "bp") dot.style.background = "#1f2937";
+      else if (k === "b") { dot.style.background = "#1f2937"; dot.style.opacity = "0.45"; }
+      else dot.style.background = BETA_BAND_COLORS[k];
+      pill.appendChild(dot);
+      pill.appendChild(document.createTextNode(" " + lbl));
+      zoneLegendEl.appendChild(pill);
+    });
+
+    function renderKPI() {
+      const sel = diagSelect.value;
+      const panel = data.diagnostics[sel];
+      if (!panel) return;
+      const xmin = range.from, xmax = range.to;
+      const rows = panel.rows.filter(r => {
+        const t = parseDate(r.d);
+        return t >= xmin && t <= xmax;
+      });
+      const latest = rows.length ? rows[rows.length - 1] : null;
+      const strip = document.getElementById("kpi-strip");
+      strip.innerHTML = "";
+      const bp = latest ? latest.beta_prime : 0;
+      const band = latest ? betaBand(bp) : "";
+      const bandLabel = latest ? betaBandLabel(bp) : "—";
+      const tiles = [
+        ["β state",   bandLabel,                                     latest ? "beta-" + band : ""],
+        ["β'ₜ",       latest ? bp.toFixed(3) : "—",                  ""],
+        ["Q combined", latest ? latest.q_combined.toFixed(3) : "—", ""],
+        ["Gross",      latest ? (latest.gross * 100).toFixed(1) + "%" : "—", ""],
+        ["Cash",       latest ? (latest.cash * 100).toFixed(1) + "%" : "—",  ""],
+      ];
+      tiles.forEach(([lbl, val, cls]) => {
+        const tile = document.createElement("div");
+        tile.className = "kpi-tile " + cls;
+        tile.innerHTML = '<div class="label">' + lbl + '</div><div class="value">' + val + '</div>';
+        strip.appendChild(tile);
+      });
+      const note = document.getElementById("kpi-asof-note");
+      note.textContent = latest
+        ? "As of " + latest.d + " · " + rows.length + " engine ticks in window"
+        : "No V7.3 engine ticks in current date window.";
+    }
+
+    function renderBetaChart() {
+      const sel = diagSelect.value;
+      const panel = data.diagnostics[sel];
+      if (!panel) return;
+      const xmin = range.from, xmax = range.to;
+      const rows = panel.rows.filter(r => {
+        const t = parseDate(r.d);
+        return t >= xmin && t <= xmax;
+      });
+      const svg = document.getElementById("zone-chart");
+      svg.innerHTML = "";
+      svg.removeAttribute("viewBox");
+      const w = svg.clientWidth || 1200;
+      const h = svg.clientHeight || 360;
+      svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+      const pad = { l: 56, r: 24, t: 14, b: 30 };
+      if (rows.length === 0) return;
+      const xs = rows.map(r => parseDate(r.d));
+      const xlo = xmin > 0 ? xmin : Math.min(...xs);
+      const xhi = xmax < Infinity ? xmax : Math.max(...xs);
+      const sx = v => pad.l + (w - pad.l - pad.r) * (v - xlo) / Math.max(xhi - xlo, 1);
+      const sy = v => pad.t + (h - pad.t - pad.b) * (1 - v);
+
+      // Y-axis grid + ticks at 0 / 0.25 / 0.5 / 0.75 / 1
+      [0, 0.25, 0.5, 0.75, 1].forEach(yv => {
+        const ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        ln.setAttribute("x1", pad.l); ln.setAttribute("x2", w - pad.r);
+        ln.setAttribute("y1", sy(yv)); ln.setAttribute("y2", sy(yv));
+        ln.setAttribute("stroke", "var(--grid)"); ln.setAttribute("stroke-width", "1");
+        svg.appendChild(ln);
+        const lbl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        lbl.setAttribute("x", pad.l - 8); lbl.setAttribute("y", sy(yv) + 4);
+        lbl.setAttribute("text-anchor", "end");
+        lbl.setAttribute("font-size", "11"); lbl.setAttribute("fill", "var(--muted)");
+        lbl.textContent = yv.toFixed(2);
+        svg.appendChild(lbl);
+      });
+
+      // β bands — run-length encode consecutive same-band rows.
+      // Each row's band is computed from its β'ₜ value.
+      let i = 0;
+      while (i < rows.length) {
+        const bandI = betaBand(rows[i].beta_prime);
+        let j = i;
+        while (j + 1 < rows.length && betaBand(rows[j + 1].beta_prime) === bandI) j++;
+        const x0 = sx(parseDate(rows[i].d));
+        const x1 = sx(parseDate(rows[j].d));
+        const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        r.setAttribute("x", x0); r.setAttribute("y", pad.t);
+        r.setAttribute("width", Math.max(1, x1 - x0));
+        r.setAttribute("height", h - pad.t - pad.b);
+        r.setAttribute("class", "beta-band-" + bandI);
+        svg.appendChild(r);
+        i = j + 1;
+      }
+
+      // Reference dashed lines at the band thresholds 0.25 / 0.5 / 0.75
+      [0.25, 0.50, 0.75].forEach(thr => {
+        const ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        ln.setAttribute("x1", pad.l); ln.setAttribute("x2", w - pad.r);
+        ln.setAttribute("y1", sy(thr)); ln.setAttribute("y2", sy(thr));
+        ln.setAttribute("stroke", "#94a3b8"); ln.setAttribute("stroke-width", "1");
+        ln.setAttribute("stroke-dasharray", "4 3");
+        svg.appendChild(ln);
+      });
+
+      // βₜ (V6.3 base) line — semi-transparent so β'ₜ stands out
+      const pathBase = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      let dB = "";
+      rows.forEach((r, idx) => {
+        const x = sx(parseDate(r.d));
+        const y = sy(Math.max(0, Math.min(1, r.beta)));
+        dB += (idx === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1) + " ";
+      });
+      pathBase.setAttribute("d", dB);
+      pathBase.setAttribute("fill", "none");
+      pathBase.setAttribute("stroke", "#1f2937");
+      pathBase.setAttribute("stroke-opacity", "0.40");
+      pathBase.setAttribute("stroke-width", "1");
+      pathBase.setAttribute("stroke-dasharray", "3 3");
+      svg.appendChild(pathBase);
+
+      // β'ₜ (V7.3 with Q) line — primary
+      const pathPrime = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      let dP = "";
+      rows.forEach((r, idx) => {
+        const x = sx(parseDate(r.d));
+        const y = sy(Math.max(0, Math.min(1, r.beta_prime)));
+        dP += (idx === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1) + " ";
+      });
+      pathPrime.setAttribute("d", dP);
+      pathPrime.setAttribute("fill", "none");
+      pathPrime.setAttribute("stroke", "#1f2937");
+      pathPrime.setAttribute("stroke-width", "1.5");
+      svg.appendChild(pathPrime);
+
+      // X-axis date labels (sparse)
+      const ticks = 6;
+      for (let k = 0; k <= ticks; k++) {
+        const tval = xlo + (xhi - xlo) * (k / ticks);
+        const lbl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        lbl.setAttribute("x", sx(tval)); lbl.setAttribute("y", h - pad.b + 18);
+        lbl.setAttribute("text-anchor", "middle");
+        lbl.setAttribute("font-size", "11"); lbl.setAttribute("fill", "var(--muted)");
+        lbl.textContent = fmtDateISO(tval);
+        svg.appendChild(lbl);
+      }
+    }
+
+    function renderDiagnostics() { renderKPI(); renderBetaChart(); }
+
+    diagSelect.addEventListener("change", renderDiagnostics);
+    renderDiagnostics();
+    redraws.push(renderDiagnostics);
+    window.addEventListener("resize", renderDiagnostics);
+  }
+
+  // -----------------------------------------------------------------
+  // V7 Qualifying polygons panel
+  // -----------------------------------------------------------------
+  const polygonPanel = document.getElementById("polygon-panel");
+  const polygonSelect = document.getElementById("polygon-select");
+  const polygonGrid = document.getElementById("polygon-grid");
+  const polygonNames = Object.keys(data.polygons || {});
+  if (polygonNames.length > 0) {
+    polygonPanel.style.display = "";
+    polygonNames.forEach(n => {
+      const opt = document.createElement("option");
+      opt.value = n;
+      opt.textContent = (data.diagnostics && data.diagnostics[n] && data.diagnostics[n].label) || n;
+      polygonSelect.appendChild(opt);
+    });
+
+    function renderPolygons() {
+      const sel = polygonSelect.value;
+      const list = data.polygons[sel] || [];
+      polygonGrid.innerHTML = "";
+      list.forEach(p => {
+        const card = document.createElement("div");
+        card.className = "polygon-card";
+        const badge = '<span class="badge ' + (p.enabled ? 'on' : 'off') + '">'
+                      + (p.enabled ? 'On' : 'Off') + '</span>';
+        let obsHtml = "";
+        const obs = p.latest_observation || {};
+        const keys = Object.keys(obs);
+        if (keys.length) {
+          obsHtml = '<div class="obs">' + keys.map(k => {
+            const v = obs[k];
+            const vs = (typeof v === "number") ? v.toFixed(4) : String(v);
+            return '<div class="row"><span>' + k + '</span><span>' + vs + '</span></div>';
+          }).join("") + '</div>';
+        } else {
+          obsHtml = '<div class="obs"><span class="subtle">no observation yet</span></div>';
+        }
+        card.innerHTML = '<div class="name">' + p.name + badge + '</div>'
+                       + '<div class="role">' + p.label + ' &middot; ' + p.role + '</div>'
+                       + obsHtml;
+        polygonGrid.appendChild(card);
+      });
+    }
+
+    polygonSelect.addEventListener("change", renderPolygons);
+    renderPolygons();
+  }
+})();
+</script>
+</body>
+</html>
