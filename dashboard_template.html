@@ -62,6 +62,8 @@ h2 { margin: 0 0 10px 0; font-size: 16px; font-weight: 650; }
   background: #fff; cursor: pointer; user-select: none; font-size: 12px; }
 .legend-item.off { opacity: .42; text-decoration: line-through; }
 .legend-item .dot { width: 8px; height: 8px; border-radius: 50%; }
+.color-editable { cursor: pointer; transition: outline-color .1s; outline: 2px solid transparent; outline-offset: 1px; }
+.color-editable:hover { outline-color: rgba(99, 102, 241, 0.6); }
 .chart { display: block; width: 100%; height: 360px; }
 .weight-chart { height: 320px; }
 select { height: 30px; border: 1px solid var(--border); border-radius: 6px;
@@ -417,7 +419,7 @@ svg.chart { cursor: crosshair; touch-action: none; }
       const tr = document.createElement("tr");
       const labelClass = r.info ? "has-info" : "";
       tr.innerHTML =
-        `<td><span class="swatch" style="background:${r.color}"></span><span class="${labelClass}" data-signal-name="${r.name}">${r.label}</span></td>
+        `<td><span class="swatch" data-color-target="${r.name}" style="background:${r.color}"></span><span class="${labelClass}" data-signal-name="${r.name}">${r.label}</span></td>
          <td class="num">${fmtPct(m.total)}</td>
          <td class="num">${fmtPct(m.cagr)}</td>
          <td class="num">${fmtPct(m.vol)}</td>
@@ -427,9 +429,10 @@ svg.chart { cursor: crosshair; touch-action: none; }
          <td class="num">${fmtPct(m.maxDD)}</td>`;
       summaryTbody.appendChild(tr);
     });
-    // After (re)render, rebind hover tooltips (the .has-info spans were just
-    // rebuilt — old listeners are gone with the old DOM).
+    // After (re)render, rebind hover tooltips + color pickers (the spans were
+    // just rebuilt — old listeners are gone with the old DOM).
     bindInfoTooltips(summaryTbody);
+    bindColorPickers(summaryTbody);
 
     // Visual sort indicators (▲ / ▼) on the active column header.
     document.querySelectorAll('#summary-table th[data-sort-key]').forEach(th => {
@@ -488,6 +491,10 @@ svg.chart { cursor: crosshair; touch-action: none; }
   // Those are `const`-declared so they'd hit a temporal-dead-zone ReferenceError
   // if this block sat after the first invocation (which would silently abort
   // the rest of the IIFE — no charts, no toolbar, no presets).
+  // Hover dwell before the info tooltip appears — long enough that a cursor
+  // merely passing over a label doesn't flash the tooltip, short enough that
+  // a deliberate linger feels responsive.
+  const INFO_TOOLTIP_DELAY_MS = 450;
   const infoTooltip = document.createElement("div");
   infoTooltip.className = "info-tooltip";
   document.body.appendChild(infoTooltip);
@@ -521,15 +528,76 @@ svg.chart { cursor: crosshair; touch-action: none; }
       const entry = infoLookup[name];
       if (!entry) return;
       el.classList.add("has-info");
+      // Show only after the cursor has dwelled INFO_TOOLTIP_DELAY_MS ms on the
+      // label. mouseleave cancels a pending show; mousemove keeps the latest
+      // cursor position so the delayed tooltip lands under the pointer.
+      let showTimer = null, lastEv = null;
       el.addEventListener("mouseenter", ev => {
-        infoTooltip.innerHTML =
-          `<div class="head">${_escapeHtml(entry.label)}</div>` +
-          `<div class="body">${_escapeHtml(entry.info)}</div>`;
-        infoTooltip.style.display = "block";
-        _positionInfoTooltip(ev);
+        lastEv = ev;
+        showTimer = setTimeout(() => {
+          showTimer = null;
+          infoTooltip.innerHTML =
+            `<div class="head">${_escapeHtml(entry.label)}</div>` +
+            `<div class="body">${_escapeHtml(entry.info)}</div>`;
+          infoTooltip.style.display = "block";
+          _positionInfoTooltip(lastEv);
+        }, INFO_TOOLTIP_DELAY_MS);
       });
-      el.addEventListener("mousemove", _positionInfoTooltip);
-      el.addEventListener("mouseleave", () => { infoTooltip.style.display = "none"; });
+      el.addEventListener("mousemove", ev => {
+        lastEv = ev;
+        if (infoTooltip.style.display === "block") _positionInfoTooltip(ev);
+      });
+      el.addEventListener("mouseleave", () => {
+        if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+        infoTooltip.style.display = "none";
+      });
+    });
+  }
+
+  // ---------- Per-signal line-color picker ----------
+  // The color swatch inside any signal label (legend chips + summary-table
+  // rows) is click-editable. Clicking opens a native color input; the chosen
+  // color is pushed into the shared data model and every chart re-renders.
+  const colorInput = document.createElement("input");
+  colorInput.type = "color";
+  colorInput.setAttribute("aria-hidden", "true");
+  colorInput.style.cssText =
+    "position:fixed;left:0;top:0;width:0;height:0;opacity:0;pointer-events:none;border:0;padding:0;";
+  document.body.appendChild(colorInput);
+  let colorTargetName = null;
+
+  function _toHex6(c) {
+    return (typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : "#475569";
+  }
+  function setSignalColor(name, color) {
+    [data.summary, data.curves, data.drawdowns].forEach(arr => {
+      (arr || []).forEach(e => { if (e.name === name) e.color = color; });
+    });
+    // Live-update swatches/dots already in the DOM (chart legends aren't
+    // rebuilt by a plain redraw; the summary table is, but updating here too
+    // is harmless and keeps the change instant).
+    document.querySelectorAll('[data-color-target="' + CSS.escape(name) + '"]')
+      .forEach(el => { el.style.background = color; });
+    renderAll();  // redraw chart lines + recompute summary with the new color
+  }
+  colorInput.addEventListener("input", () => {
+    if (colorTargetName) setSignalColor(colorTargetName, colorInput.value);
+  });
+
+  function bindColorPickers(rootEl) {
+    if (!rootEl) return;
+    rootEl.querySelectorAll("[data-color-target]").forEach(el => {
+      el.classList.add("color-editable");
+      el.title = "Click to change this line's color";
+      el.addEventListener("click", ev => {
+        // Don't let the click bubble to the legend chip (visibility toggle).
+        ev.stopPropagation();
+        ev.preventDefault();
+        colorTargetName = el.getAttribute("data-color-target");
+        const cur = (data.curves.find(c => c.name === colorTargetName) || {}).color;
+        colorInput.value = _toHex6(cur);
+        colorInput.click();
+      });
     });
   }
 
@@ -843,7 +911,7 @@ svg.chart { cursor: crosshair; touch-action: none; }
         const el = document.createElement("span");
         el.className = "legend-item" + (visible[s.name] ? "" : " off");
         el.setAttribute("data-signal-name", s.name);
-        el.innerHTML = `<span class="dot" style="background:${s.color}"></span>${s.label}`;
+        el.innerHTML = `<span class="dot" data-color-target="${s.name}" style="background:${s.color}"></span>${s.label}`;
         el.addEventListener("click", () => {
           visible[s.name] = !visible[s.name];
           renderLegend();
@@ -853,6 +921,7 @@ svg.chart { cursor: crosshair; touch-action: none; }
         legendEl.appendChild(el);
       });
       bindInfoTooltips(legendEl);
+      bindColorPickers(legendEl);
     }
 
     renderLegend();
@@ -887,7 +956,7 @@ svg.chart { cursor: crosshair; touch-action: none; }
   // window-local peak, so the curve resets to 0 at the visible left edge
   // instead of inheriting the global cummax from before the window.
   buildLineChart("drawdown-chart", "drawdown-legend", data.curves,
-    v => (v * 100).toFixed(0) + "%", 0.05, null, { rebase: 'drawdown' });
+    v => (v * 100).toFixed(0) + "%", 0.05, v73DefaultBands, { rebase: 'drawdown' });
 
   // ---------- Weights stacked area ----------
   const weightsSelect = document.getElementById("weights-select");

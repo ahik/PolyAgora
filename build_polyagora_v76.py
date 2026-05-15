@@ -160,6 +160,13 @@ def _load_equity(name: str, out: Path) -> pd.Series | None:
     return (1.0 + r.fillna(0.0)).cumprod()
 
 
+def _load_diagnostics(name: str, out: Path) -> pd.DataFrame | None:
+    p = out / f"diagnostics_{name}.csv"
+    if not p.exists():
+        return None
+    return pd.read_csv(p, parse_dates=["trading_date"]).set_index("trading_date")
+
+
 def _build_run(
     name: str, label: str, color: str, info: str, out: Path
 ) -> dash.SignalRun | None:
@@ -173,6 +180,7 @@ def _build_run(
         name=name, label=label, color=color, info=info,
         summary=summary_row(name, returns),
         returns=returns, equity=equity, weights=weights,
+        diagnostics=_load_diagnostics(name, out),
     )
 
 

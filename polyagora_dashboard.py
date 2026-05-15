@@ -198,22 +198,24 @@ def build_payload(
             weights_mom_panels[r.name] = _weights_payload(r.weights_mom, universe)
 
         if r.diagnostics is not None and not r.diagnostics.empty:
+            # Only emit β/Q fields when the source CSV actually carries them.
+            # Older engines (v74d_q, v74d, v75_no_mom_eigen, v74b_template) have
+            # diagnostics but no β'ₜ — the dashboard's V7.3 panel filter keys
+            # off `rows[0].beta_prime !== undefined`, so omitting absent fields
+            # keeps the panel scoped to true V7.3-line signals (β admissibility
+            # timeline + KPI strip).
+            cols = set(r.diagnostics.columns)
+            v73_fields = [c for c in ("beta", "beta_prime", "q_combined",
+                                      "q_vaidm", "q_add") if c in cols]
+            common_fields = [c for c in ("gross", "cash") if c in cols]
             rows = []
             for d, row in r.diagnostics.iterrows():
-                # V7.3 β/Q fields default to identity (β=β'=Q=1) if absent
-                # so legacy V7 panels still get sensible numbers.
-                rows.append({
-                    "d": d.strftime("%Y-%m-%d"),
-                    # V7.3 β admissibility fields
-                    "beta": round(float(row.get("beta", 1.0)), 4),
-                    "beta_prime": round(float(row.get("beta_prime", 1.0)), 4),
-                    "q_combined": round(float(row.get("q_combined", 1.0)), 4),
-                    "q_vaidm": round(float(row.get("q_vaidm", 1.0)), 4),
-                    "q_add": round(float(row.get("q_add", 1.0)), 4),
-                    # Common
-                    "gross": round(float(row.get("gross", 0.0)), 4),
-                    "cash": round(float(row.get("cash", 0.0)), 4),
-                })
+                entry: dict = {"d": d.strftime("%Y-%m-%d")}
+                for c in v73_fields:
+                    entry[c] = round(float(row[c]), 4)
+                for c in common_fields:
+                    entry[c] = round(float(row[c]), 4)
+                rows.append(entry)
             diagnostics_panels[r.name] = {
                 "label": label,
                 "color": color,
