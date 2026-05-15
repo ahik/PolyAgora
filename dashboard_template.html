@@ -54,6 +54,8 @@ h2 { margin: 0 0 10px 0; font-size: 16px; font-weight: 650; }
 .summary-table th.sort-desc::after { visibility: visible; content: "▼"; }
 .summary-table .swatch { display: inline-block; width: 10px; height: 10px;
   border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+.summary-table td.dov-pass { background: rgba(34, 197, 94, 0.16); }
+.summary-table td.dov-fail { background: rgba(220, 38, 38, 0.14); }
 .chart-head { display: flex; justify-content: space-between; align-items: center;
   gap: 16px; margin-bottom: 8px; flex-wrap: wrap; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -185,11 +187,12 @@ svg.chart { cursor: crosshair; touch-action: none; }
           <th class="num" data-sort-key="sortino">Sortino</th>
           <th class="num" data-sort-key="calmar">Calmar</th>
           <th class="num" data-sort-key="maxDD">Max DD</th>
+          <th class="num" data-sort-key="corrSPY">Corr SPY</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
-    <div class="note">Metrics recalculate live as you change the From / To window or drag-to-zoom on any chart. Click any column header to sort (click again to reverse). CAGR uses 252 trading days/yr. Sharpe = mean(r) · 252 / (std · √252). Sortino uses downside-only std (returns &lt; 0); undefined on windows with no negative returns. Calmar = CAGR / |Max DD|; undefined on flat curves. Hover the series name (dotted underline) for an extended description of each signal.</div>
+    <div class="note">Metrics recalculate live as you change the From / To window or drag-to-zoom on any chart. Click any column header to sort (click again to reverse). CAGR uses 252 trading days/yr. Sharpe = mean(r) · 252 / (std · √252). Sortino uses downside-only std (returns &lt; 0); undefined on windows with no negative returns. Calmar = CAGR / |Max DD|; undefined on flat curves. Corr SPY is the in-window correlation of each series' daily returns to the S&amp;P 500. The Sharpe / Sortino / Calmar / Max DD / Corr SPY cells are shaded <b style="background:rgba(34,197,94,0.16)">green</b> / <b style="background:rgba(220,38,38,0.14)">red</b> for pass / fail against the Dov "first CTO test" targets (Sharpe &gt; 1.2, Sortino &gt; 1.5, Calmar &gt; 1.0, |Max DD| &lt; 8%, |Corr SPY| &lt; 0.35) — recomputed for the selected time window. Hover the series name (dotted underline) for an extended description of each signal.</div>
   </section>
 
   <section class="panel">
@@ -394,6 +397,56 @@ svg.chart { cursor: crosshair; touch-action: none; }
     return sortState.dir === 'asc' ? av - bv : bv - av;
   }
 
+  // ---------- Dov benchmark pass/fail ----------
+  // Cells colour green/red against the Dov "first CTO test" minimum
+  // internal targets (docs/Dov Benchmarks .pdf). Evaluated inside
+  // recomputeSummary, so the colours refresh live on every range
+  // change, drag-zoom, sort, and legend toggle.
+  const DOV_TARGETS = {
+    sharpe:  v => v > 1.2,
+    sortino: v => v > 1.5,
+    calmar:  v => v > 1.0,
+    maxDD:   v => Math.abs(v) < 0.08,
+    corrSPY: v => Math.abs(v) < 0.35,
+  };
+  function dovClass(key, v) {
+    const test = DOV_TARGETS[key];
+    if (!test || v == null || (typeof v === "number" && !isFinite(v))) return "";
+    return test(v) ? "dov-pass" : "dov-fail";
+  }
+
+  // S&P 500 daily returns (date → ret), precomputed once for live
+  // window-correlation of every series against SPY.
+  const _sp500Curve = (data.curves || []).find(c => c.name === "sp500");
+  const _spyRet = new Map();
+  if (_sp500Curve) {
+    const p = _sp500Curve.points;
+    for (let i = 1; i < p.length; i++) {
+      _spyRet.set(p[i].d, p[i].v / p[i - 1].v - 1);
+    }
+  }
+  function corrToSPY(pts) {
+    if (!_sp500Curve || !pts || pts.length < 31) return null;
+    const xs = [], ys = [];
+    for (let i = 1; i < pts.length; i++) {
+      const sr = _spyRet.get(pts[i].d);
+      if (sr == null) continue;
+      xs.push(pts[i].v / pts[i - 1].v - 1);
+      ys.push(sr);
+    }
+    const n = xs.length;
+    if (n < 30) return null;
+    let mx = 0, my = 0;
+    for (let i = 0; i < n; i++) { mx += xs[i]; my += ys[i]; }
+    mx /= n; my /= n;
+    let sxy = 0, sxx = 0, syy = 0;
+    for (let i = 0; i < n; i++) {
+      const dx = xs[i] - mx, dy = ys[i] - my;
+      sxy += dx * dy; sxx += dx * dx; syy += dy * dy;
+    }
+    return (sxx > 0 && syy > 0) ? sxy / Math.sqrt(sxx * syy) : null;
+  }
+
   function recomputeSummary() {
     const xmin = range.from, xmax = range.to;
     const rows = data.summary.filter(r => equityVisible[r.name] !== false).map(r => {
@@ -403,12 +456,14 @@ svg.chart { cursor: crosshair; touch-action: none; }
             .filter(p => { const t = parseDate(p.d); return t >= xmin && t <= xmax; })
             .map(p => ({ d: p.d, v: p.v }))
         : [];
+      const metrics = metricsFromEquityWindow(pts);
+      metrics.corrSPY = corrToSPY(pts);
       return {
         name: r.name,
         label: r.label,
         color: r.color,
         info: r.info,
-        metrics: metricsFromEquityWindow(pts),
+        metrics,
       };
     });
     if (sortState.col) rows.sort(compareRows);
@@ -423,10 +478,11 @@ svg.chart { cursor: crosshair; touch-action: none; }
          <td class="num">${fmtPct(m.total)}</td>
          <td class="num">${fmtPct(m.cagr)}</td>
          <td class="num">${fmtPct(m.vol)}</td>
-         <td class="num sharpe-col">${fmtNum(m.sharpe)}</td>
-         <td class="num">${fmtNum(m.sortino)}</td>
-         <td class="num">${fmtNum(m.calmar)}</td>
-         <td class="num">${fmtPct(m.maxDD)}</td>`;
+         <td class="num sharpe-col ${dovClass('sharpe', m.sharpe)}">${fmtNum(m.sharpe)}</td>
+         <td class="num ${dovClass('sortino', m.sortino)}">${fmtNum(m.sortino)}</td>
+         <td class="num ${dovClass('calmar', m.calmar)}">${fmtNum(m.calmar)}</td>
+         <td class="num ${dovClass('maxDD', m.maxDD)}">${fmtPct(m.maxDD)}</td>
+         <td class="num ${dovClass('corrSPY', m.corrSPY)}">${fmtNum(m.corrSPY)}</td>`;
       summaryTbody.appendChild(tr);
     });
     // After (re)render, rebind hover tooltips + color pickers (the spans were

@@ -1,12 +1,14 @@
 # PolyAgora Runtime
 
 Research/runtime engines and benchmarking harnesses for the PolyAgora
-allocation system. The active production line is **V7.7** — the frozen
-V7.6α meta-regime steering kernel plus two downstream overlays:
-**ADD-lite** (a topology-deformation field) and **Kelly** (capital-
-intensity sizing). V7.6 remains the steering base the overlays sit on.
-Prior versions (V6.3 → V7.5) remain in the tree as building blocks and
-as on-dashboard reference baselines.
+allocation system. The active production line is **V7.8** — the frozen
+V7.6α meta-regime steering kernel plus two refined downstream overlays:
+**asset-level ADD-lite** (per-asset continuous topology deformation) and
+**conditional Kelly** (a soft, ADD-gated capital sizer). V7.7 is the
+prior overlay cut (portfolio-level ADD-lite + μ/σ²·Φ Kelly); V7.6
+remains the steering base the overlays sit on. Prior versions
+(V6.3 → V7.5) remain in the tree as building blocks and as on-dashboard
+reference baselines.
 
 > **Partner data not included.** Every runner / validator / sweep script
 > expects `Agur/baseline_pnl_partner_delivery.xlsx` (partner-proprietary
@@ -25,19 +27,22 @@ polyagora_v73_engine.py           V7.3 — Driver Seat + Q polygons (VAIDM × AD
 polyagora_v74_engine.py           V7.4 — hard strategy-manifold engine
 polyagora_v74b_engine.py          V7.4b/c — soft manifold (top-K block aggregation)
 polyagora_v75_engine.py           V7.5α — momentum-as-polygon + the v74d_q winner
-polyagora_v76_engine.py           V7.6 — meta-regime steering (V7.7 base kernel)
-polyagora_v77_engine.py           V7.7 — ADD-lite + Kelly overlays (active line)
+polyagora_v76_engine.py           V7.6 — meta-regime steering (V7.7/V7.8 base kernel)
+polyagora_v77_engine.py           V7.7 — ADD-lite + Kelly overlays (prior overlay cut)
+polyagora_v78_engine.py           V7.8 — asset-level ADD-lite + conditional Kelly (active line)
 
 run_polyagora_v74_partner.py      V7.3 → V7.5 registry / dashboard runner
 run_v76_check.py                  V7.6 manifold + meta-blend backtest
 run_v76_sweep.py                  V7.6 hyperparameter sensitivity sweep
 run_v77_check.py                  V7.7 ADD-lite + Kelly overlay backtest
+run_v78_check.py                  V7.8 asset-level ADD-lite + conditional Kelly backtest
 sweep_v75.py / analyze_v75_sweep.py    V7.5 parameter sweep + analyzer
 validate_v74c.py / validate_v75.py     version validation suites
 
 build_polyagora.py                full V7.3 → V7.5 pipeline (data refresh + run + dashboards)
 build_polyagora_v76.py            V7.6 dashboard composer (curated v76 lineup)
 build_polyagora_v77.py            V7.7 dashboard composer (overlays + v76 base)
+build_polyagora_v78.py            V7.8 dashboard composer (refined overlays + v76 base)
 build_dashboard_nm.py             "no momentum" dashboard variant
 build_algo_v74_pdf.py             Algo_V74.md → PDF
 build_v74d_vs_momentum_pdf.py     V74d_vs_Momentum.md → PDF
@@ -45,6 +50,73 @@ build_v76_findings_pdf.py         V76_Findings.md → PDF
 
 polyagora_dashboard.py            engine-agnostic dashboard layer (SignalRun → HTML)
 dashboard_template.html           HTML template (charts, summary table, presets, tooltips)
+```
+
+## V7.8 — Asset-level ADD-lite + Conditional Kelly
+
+V7.8 keeps the frozen V7.6α governance base and refines both V7.7
+overlays per `docs/PolyAgora V7.8 Absolute Return Mode.pdf` and
+`docs/Keep V7.7-ADD.pdf`. The V7.7 evaluation validated ADD-lite but
+found Kelly "too blunt" — the μ/σ²·Φ sizer was a permanent brake that
+moved too much capital to `CASH` and killed compounding.
+
+**Asset-level ADD-lite (spec §9)** — V7.7 ADD-lite was a single
+portfolio-level scalar scaling the whole book. V7.8 makes it a per-asset
+field:
+
+```
+ADD_{i,t} ∈ [0,1]        w'_{i,t} = w_{i,t} · (1 − λ · ADD_{i,t})
+```
+
+so a fragile asset is trimmed without flattening the assets that are
+still convex. Five segments, all derived from the 13-asset realized PnL
+(ADD-lite stays external to the endogenous geometry): per-asset crowding,
+recoverability loss, momentum saturation, volatility asymmetry, plus a
+shared breadth-degeneration term.
+
+**Conditional Kelly (spec §11–§12)** — V7.7's `f = mode_mult·(μ/σ²)·Φ`
+is removed (§11 flags classical μ/σ² as "unstable under noisy
+estimates"). V7.8 Kelly is the §12 gate:
+
+```
+K_t = max(0, 1 − γ · (ADD_book,t − baseline_t)_+ )      γ ∈ [0.2, 0.5]
+w''_{i,t} = K_t · w'_{i,t}
+```
+
+`baseline` is `ADD_book`'s own trailing median, so Kelly is **inert
+(K = 1) at or below normal book fragility** and trims only gently above
+it — conditional, not a continuous brake.
+
+Empirically (full sample 2008–2026) **v78-ADD beats both v76α and
+v77-ADD on Sharpe, Sortino and Calmar at lower drawdown** — the spec §9
+"preserve convex winners" property realized. Conditional Kelly is
+near-inert by design (it barely moves the book in this sample); it is a
+quiet safety gate, not an alpha source. Per `docs/Dov Benchmarks .pdf`,
+this focused increment is a governance/risk refinement — clearing the
+Dov bar (Sharpe / Sortino / Calmar > 1.5) needs the Phase-2 alpha
+sleeves, not this version.
+
+### Run V7.8
+
+```bash
+# v76α base + v77-ADD ref + v78-ADD + v78, with the Dov benchmark panel
+python run_v78_check.py
+
+# tuning knobs
+python run_v78_check.py --add-lam 0.6 --kelly-gamma 0.35
+
+# build the v78 dashboard (run run_v76_check.py + build_polyagora.py --v75 first)
+python build_polyagora_v78.py
+```
+
+Outputs land in `polyagora_v78_outputs/`:
+
+```
+dashboard.html / dashboard_data.json   self-contained interactive dashboard
+weights_/returns_ {v76, v77_add, v78_add, v78}
+add_field_v78.csv                      asset-level ADD-lite field
+kelly_v78.csv                          book_add, baseline, K_t
+summary_v78_check.csv / crisis_v78_check.csv / dov_v78_check.csv
 ```
 
 ## V7.7 — ADD-lite + Kelly Overlays
