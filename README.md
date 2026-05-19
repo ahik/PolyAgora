@@ -1,14 +1,23 @@
 # PolyAgora Runtime
 
 Research/runtime engines and benchmarking harnesses for the PolyAgora
-allocation system. The active production line is **V7.8** — the frozen
-V7.6α meta-regime steering kernel plus two refined downstream overlays:
-**asset-level ADD-lite** (per-asset continuous topology deformation) and
-**conditional Kelly** (a soft, ADD-gated capital sizer). V7.7 is the
-prior overlay cut (portfolio-level ADD-lite + μ/σ²·Φ Kelly); V7.6
-remains the steering base the overlays sit on. Prior versions
-(V6.3 → V7.5) remain in the tree as building blocks and as on-dashboard
-reference baselines.
+allocation system. The active production line is **V7.10** — it pairs:
+
+- **V7.9** — the winners-consolidated allocator: the V7.8 asset-level
+  ADD-lite core plus a governed defensive rotation with convexity
+  re-entry. Best risk-adjusted line to date (Sharpe 0.87).
+- **V7.10** — the **Strategy Sleeve Registry**: a validation +
+  admission gate (Deflated Sharpe, realistic cost, correlation-to-book)
+  through which candidate alpha sleeves must pass before joining the
+  V7.9 book.
+
+The V7.6α meta-regime steering kernel remains the frozen governance
+base under both. V7.7 / V7.8 are prior overlay cuts (portfolio-level
+ADD-lite + μ/σ²·Φ Kelly; then asset-level ADD-lite + conditional Kelly).
+Prior versions (V6.3 → V7.5) remain in the tree as building blocks and
+as on-dashboard reference baselines. Full version history is in
+`RELEASE_NOTES.md`; the cross-method analysis is in
+`Allocation_Method_Study.md`.
 
 > **Partner data not included.** Every runner / validator / sweep script
 > expects `Agur/baseline_pnl_partner_delivery.xlsx` (partner-proprietary
@@ -27,15 +36,21 @@ polyagora_v73_engine.py           V7.3 — Driver Seat + Q polygons (VAIDM × AD
 polyagora_v74_engine.py           V7.4 — hard strategy-manifold engine
 polyagora_v74b_engine.py          V7.4b/c — soft manifold (top-K block aggregation)
 polyagora_v75_engine.py           V7.5α — momentum-as-polygon + the v74d_q winner
-polyagora_v76_engine.py           V7.6 — meta-regime steering (V7.7/V7.8 base kernel)
+polyagora_v76_engine.py           V7.6 — meta-regime steering (frozen base kernel)
 polyagora_v77_engine.py           V7.7 — ADD-lite + Kelly overlays (prior overlay cut)
-polyagora_v78_engine.py           V7.8 — asset-level ADD-lite + conditional Kelly (active line)
+polyagora_v78_engine.py           V7.8 — asset-level ADD-lite + conditional Kelly
+polyagora_v79_engine.py           V7.9 — governed defensive rotation / convexity re-entry
+polyagora_validation.py           V7.10 — DSR gate, realistic cost, walk-forward metrics
+polyagora_sleeve_registry.py      V7.10 — Strategy Sleeve Registry + admission gates
+polyagora_v710_engine.py          V7.10 — mean-reversion sleeve + governed sleeve blend
 
 run_polyagora_v74_partner.py      V7.3 → V7.5 registry / dashboard runner
 run_v76_check.py                  V7.6 manifold + meta-blend backtest
 run_v76_sweep.py                  V7.6 hyperparameter sensitivity sweep
 run_v77_check.py                  V7.7 ADD-lite + Kelly overlay backtest
 run_v78_check.py                  V7.8 asset-level ADD-lite + conditional Kelly backtest
+run_v79_check.py                  V7.9 winners + governed defensive rotation backtest
+run_v710_check.py                 V7.10 sleeve-registry gate + sleeve evaluation
 sweep_v75.py / analyze_v75_sweep.py    V7.5 parameter sweep + analyzer
 validate_v74c.py / validate_v75.py     version validation suites
 
@@ -43,6 +58,8 @@ build_polyagora.py                full V7.3 → V7.5 pipeline (data refresh + ru
 build_polyagora_v76.py            V7.6 dashboard composer (curated v76 lineup)
 build_polyagora_v77.py            V7.7 dashboard composer (overlays + v76 base)
 build_polyagora_v78.py            V7.8 dashboard composer (refined overlays + v76 base)
+build_polyagora_v79.py            V7.9 dashboard composer (winners-only lineup)
+build_polyagora_v710.py           V7.10 dashboard composer (winners + sleeve registry)
 build_dashboard_nm.py             "no momentum" dashboard variant
 build_algo_v74_pdf.py             Algo_V74.md → PDF
 build_v74d_vs_momentum_pdf.py     V74d_vs_Momentum.md → PDF
@@ -50,6 +67,93 @@ build_v76_findings_pdf.py         V76_Findings.md → PDF
 
 polyagora_dashboard.py            engine-agnostic dashboard layer (SignalRun → HTML)
 dashboard_template.html           HTML template (charts, summary table, presets, tooltips)
+```
+
+## V7.10 — Strategy Sleeve Registry
+
+V7.10 operationalizes the multi-sleeve architecture
+(`docs/More Sleeves.pdf`, `docs/AI Quant System.pdf`): it builds the
+governance machinery a candidate alpha strategy must pass before it can
+join the V7.9 book.
+
+**Validation layer** (`polyagora_validation.py`) — the **Deflated
+Sharpe Ratio** (corrects a Sharpe for multiple-testing selection bias),
+extended metrics (skew, excess kurtosis, profit factor), a
+size/volatility/venue `realistic_cost_bps` model, and walk-forward
+IS/OOS degradation.
+
+**Strategy Sleeve Registry** (`polyagora_sleeve_registry.py`) — a
+candidate enters the book only after clearing the ordered gate pipeline:
+
+```
+validation → DSR noise floor → correlation-to-book
+            → walk-forward degradation → contribution
+```
+
+The DSR is a *noise floor* here, not a hard 0.95 wall — that bar is the
+upstream AI-factory gate; doc-2's registry admits on regime fit,
+correlation and **contribution** (blending the sleeve must not degrade
+the book). Each sleeve is stored with metadata (id, type, regime
+affinity, failure modes, block, per-runtime-zone permission).
+
+**Sleeves evaluated — one rejected, one admitted.** The mean-reversion
+sleeve the cross-method study had named the next diversifier was
+**rejected** — short-horizon reversal has no gross edge on the
+momentum-prone universe and realistic cost annihilates it. The
+**bond-trend sleeve** — a 12-month time-series trend on the bond
+futures (TN, FGBL) — was **admitted**: it goes short bonds in
+persistent rate shocks, so it earns +1.8 Sharpe in the 2022 rate
+shock, is genuinely uncorrelated to the book (corr 0.28), and is
+low-turnover. The registry holds it at ~18%.
+
+v7.10 = v79 + the bond-trend sleeve reaches **Sharpe 0.91 / Sortino
+1.23 / Calmar 0.49** at −6.5% drawdown, and — for the first time —
+a **positive 2022 rate-shock Sharpe (+0.44** vs v79's −0.84): the
+long-standing inflationary blind spot is finally addressed.
+
+`docs/Terminal class and Banach points.pdf` is a theoretical
+refinement of the Fixed Star ontology (semantic equivalence class +
+Banach zero-tension representative) — conceptual grounding, no code.
+
+### Run V7.10
+
+```bash
+# build the v79 book, evaluate the sleeves through the registry
+python run_v710_check.py
+
+# build the v7.10 dashboard (run run_v76_check.py + build_polyagora.py --v75 first)
+python build_polyagora_v710.py
+```
+
+## V7.9 — Winners + Governed Defensive Rotation
+
+V7.9 consolidates the V6.3→V7.8 tree down to the validated winners (the
+cross-method study `Allocation_Method_Study.md` found the meta family
+internally 0.98–1.00 correlated) and adds one improvement: a **governed
+defensive rotation with convexity re-entry**
+(`docs/PolyAgora Multi-Sleeve Alpha Architecture.pdf` §13–§14).
+
+```
+w_v79 = (1 − dₜ)·w_v78-ADD + dₜ·w_defensive
+```
+
+The rotation weight `dₜ` is driven by the ADD-lite book-fragility field
+— the internal governed signal, not a lagged price trend — so re-entry
+is prompt as conditions heal. `dₜ` is inert ~78% of the time (Zone 1)
+and escalates only in genuine stress. Balanced default
+`rot_gain = 1.0, d_max = 0.6`.
+
+v79 reaches Sharpe **0.873** / Sortino 1.157 / Calmar 0.331 — the best
+risk-adjusted line to date, beating v78-ADD on all three and preserving
+the COVID-regime call. The runner/dashboard render only the
+non-dominated winner set; the v74b·*, v75·*, v76β/γ and v77·* variants
+are retired from the candidate lineup.
+
+### Run V7.9
+
+```bash
+python run_v79_check.py        # headline + Dov panel + runtime zones + correlation governance
+python build_polyagora_v79.py  # winners-only dashboard
 ```
 
 ## V7.8 — Asset-level ADD-lite + Conditional Kelly
