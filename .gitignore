@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Local virtualenv (not redistributed)
+agora/
+
+# Partner-proprietary data (not redistributed — see README)
+Agur/
+
+# Generated backtest / dashboard outputs (rebuildable from the runners)
+*_outputs/
+
+# Backups and editor lock files
+*.bak
+.~lock.*
